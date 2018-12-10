@@ -9,8 +9,6 @@ object Parse {
 
   import spark.implicits._
 
-  case class Measurement(id: Int, time: Int, x: Array[Double])
-
   val dataFile = "/home/urathai/Datasets/public/T-drive Taxi Trajectories/release/all_data.txt"
 
   def tdrive(dataFile: String): org.apache.spark.sql.Dataset[Measurement] = {

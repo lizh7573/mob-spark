@@ -8,9 +8,10 @@ object Parse {
   val spark = SparkSessionHolder.spark
   import spark.implicits._
 
+  val dataFileSome = "/home/urathai/Datasets/public/T-drive Taxi Trajectories/release/some_data.txt"
   val dataFile = "/home/urathai/Datasets/public/T-drive Taxi Trajectories/release/all_data.txt"
 
-  def tdrive(dataFile: String): org.apache.spark.sql.Dataset[Measurement] = {
+  def tdrive(dataFile: String): org.apache.spark.sql.Dataset[MeasurementID] = {
 
     val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
@@ -19,7 +20,7 @@ object Parse {
       val id = parts(0).toInt
       val t = (format.parse(parts(1)).getTime/1000).toInt
       val x = Array(parts(2).toDouble, parts(3).toDouble)
-      Measurement(id, t, x)
+      MeasurementID(id, Measurement(t, x))
     }
 
     return data

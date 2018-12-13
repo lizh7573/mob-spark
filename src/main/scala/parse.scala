@@ -13,7 +13,7 @@ object Parse {
 
   def tdrive(dataFile: String): org.apache.spark.sql.Dataset[Measurement] = {
 
-    val format = new SimpleDateFormat("YYYY-MM-dd HH:mm:ss")
+    val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
     val data = spark.read.textFile(dataFile).map{ line =>
       val parts = line.split(",")

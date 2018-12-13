@@ -3,9 +3,7 @@ import org.apache.spark.sql.SparkSession
 
 object Preprocess {
 
-  val spark = SparkSession.builder.appName("Preprocesser").getOrCreate()
-
-  import spark.implicits._
+  import SparkSessionHolder.spark.implicits._
 
   val box = ((115, 117), (39, 41))
   /**

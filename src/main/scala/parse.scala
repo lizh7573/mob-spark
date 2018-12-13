@@ -5,8 +5,7 @@ import java.util.Date
 
 object Parse {
 
-  val spark = SparkSession.builder.appName("Parser").getOrCreate()
-
+  val spark = SparkSessionHolder.spark
   import spark.implicits._
 
   val dataFile = "/home/urathai/Datasets/public/T-drive Taxi Trajectories/release/all_data.txt"

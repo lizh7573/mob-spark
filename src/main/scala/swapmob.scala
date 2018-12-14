@@ -14,16 +14,7 @@ object Swapmob {
   val partitioning: (Double, Double) = (60, 0.001)
 
   def partition(data: Measurements, partitioning: (Double, Double)): Grids = {
-    val (timePartitioning, xPartitioning) = partitioning
-
-    return data.map{
-      case MeasurementID(id, Measurement(time, x)) =>
-        val timePartition = (time/timePartitioning).toInt
-        val xPartition = Array((x(0)/xPartitioning).toInt,
-          (x(1)/xPartitioning).toInt)
-
-        GridID(id, Grid(timePartition, xPartition))
-    }
+    return data.map(_.toGridID(partitioning))
   }
 
   def swaps(data: Grids): Swaps = {

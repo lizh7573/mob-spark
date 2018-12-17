@@ -5,19 +5,13 @@ object Preprocess {
 
   import SparkSessionHolder.spark.implicits._
 
-  val box = ((115, 117), (39, 41))
+  val box = Array((115, 117), (39, 41))
   /**
     * Keep only measurements whose location is inside the given box.
    */
   def keepBox(data: org.apache.spark.sql.Dataset[MeasurementID],
-    box: ((Int, Int), (Int, Int))): org.apache.spark.sql.Dataset[MeasurementID] = {
-    // Keep only measurements inside the given box
-    val ((lowx1, uppx1), (lowx2, uppx2)) = box
-
-    return data.filter{ m =>
-      m.measurement.x(0) >= lowx1 && m.measurement.x(0) <= uppx1 &&
-      m.measurement.x(1) >= lowx2 && m.measurement.x(1) <= uppx2
-    }
+    box: Array[(Double, Double)]): org.apache.spark.sql.Dataset[MeasurementID] = {
+    return data.filter(_.measurement.x.isInBox(box))
   }
 
   /**

@@ -9,6 +9,7 @@ case class Location(x: Array[Double]) {
     LocationPartition(x.map(i => (i/partitioning).toInt))
 
   def isInBox(box: Array[(Double, Double)]): Boolean =
+    x.length == box.length &&
     x.zip(box).forall{
       case (i, (l, u)) => i <= u && i >= l
     }

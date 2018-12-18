@@ -1,5 +1,42 @@
+object TrajectoryHelper {
+  def jumpchain(locations: Array[LocationPartition]):
+      Array[LocationPartition] =
+    if (locations.isEmpty)
+      Array()
+    else
+      locations(0) +: locations.sliding(2)
+        .collect{ case Array(a, b) if a != b => b }.toArray
+
+  def jumpchainTimes(grids: Array[Grid]):
+      Array[Int] =
+    if (grids.isEmpty)
+      Array()
+    else
+      grids.tail.foldLeft((Array(): Array[Int], grids.head)) {
+        case ((ts: Array[Int], g1:Grid), g2:Grid) =>
+          if (g1.x != g2.x)
+            (ts :+ (g2.time - g1.time), g2)
+          else
+            (ts, g1)
+      }._1
+}
+
 // Holds a trajectory represented by an id and an array of measurements
-case class Trajectory(id: Int, measurements: Array[Measurement])
+case class Trajectory(id: Int, measurements: Array[Measurement]) {
+  /* The methods for Trajectory assumes that the array of Measurements
+   * is sorted with respect to time. This method makes sure that this
+   * is the case.*/
+  def normalize() = Trajectory(id, measurements.sortBy(_.time))
+
+  def jumpchain(partitioning: Double): (Int, Array[LocationPartition]) =
+    (id, TrajectoryHelper
+      .jumpchain(measurements.map(_.x.partition(partitioning))))
+
+  def jumpchainTimes(partitioning: Double): (Int, Array[Int]) =
+    (id, TrajectoryHelper
+      .jumpchainTimes(measurements
+        .map(m => Grid(m.time, m.x.partition(partitioning)))))
+}
 
 // Holds a trajectory represented by an id and an array of partitions
 case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
@@ -9,31 +46,9 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
    * the case.*/
   def normalize() = TrajectoryGrid(id, grids.sortBy(_.time))
 
-  def jumpchain(): (Int, Array[LocationPartition]) = {
-    if (grids.isEmpty)
-      return (id, Array())
-    else {
-      val locations = grids.map(_.x)
-      val distincLocations = locations(0) +: locations.
-        sliding(2).collect{ case Array(a, b) if a != b => b }.toArray
+  def jumpchain(): (Int, Array[LocationPartition]) =
+    (id, TrajectoryHelper.jumpchain(grids.map(_.x)))
 
-      return (id, distincLocations)
-    }
-  }
-
-  def jumpchainTimes(): (Int, Array[Int]) = {
-    if (grids.isEmpty)
-      return (id, Array())
-    else {
-      val times = grids.tail.foldLeft((Array(): Array[Int], grids.head)) {
-        case ((ts: Array[Int], g1:Grid), g2:Grid) =>
-          if (g1.x != g2.x)
-            (ts :+ (g2.time - g1.time), g2)
-          else
-            (ts, g1)
-      }._1
-
-      return (id, times)
-    }
-  }
+  def jumpchainTimes(): (Int, Array[Int]) =
+    (id, TrajectoryHelper.jumpchainTimes(grids))
 }

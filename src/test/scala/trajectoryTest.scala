@@ -1,26 +1,5 @@
-class TrajectoryGridTest extends org.scalatest.FunSuite {
-  val ex1 = TrajectoryGrid(0, Array())
-
-  val ex2 = TrajectoryGrid(1, Array.range(0, 10, 1).map(i => Grid(i, LocationPartition(Array(i, i)))))
-
-  val ex3 = TrajectoryGrid(2,
-    Array
-      .range(0, 10, 1)
-      .flatMap(i => Array(Grid(2*i, LocationPartition(Array(i, i))),
-        Grid(2*i + 1, LocationPartition(Array(i, i))))))
-
-  val ex4 = TrajectoryGrid(3,
-    Array
-      .range(0, 10, 1)
-      .flatMap(i => Array(Grid(2*i, LocationPartition(Array(i, i))),
-        Grid(2*i + 1, LocationPartition(Array(i, i))))) ++
-      Array
-      .range(10, 20, 1)
-      .flatMap(i => Array(Grid(2*i, LocationPartition(Array(i - 10, i - 10))),
-        Grid(2*i + 1, LocationPartition(Array(i - 10, i - 10)))))
-  )
-
-  def arrayEqual(a: Array[LocationPartition], b: Array[LocationPartition]):
+class TrajectoryHelperTest extends org.scalatest.FunSuite {
+  def arrayEqual[T](a: Array[T], b: Array[T]):
       Boolean = {
     a.length == b.length &&
     a.zip(b).forall{
@@ -28,48 +7,87 @@ class TrajectoryGridTest extends org.scalatest.FunSuite {
     }
   }
 
-  test("TrajectoryGrid.jumpchain") {
-    val jc1 = ex1.jumpchain
-    val res1 = Array(): Array[LocationPartition]
-    assert(jc1._1 === 0)
-    assert(arrayEqual(jc1._2, res1))
+  // Empty array
+  val locations1 = Array(): Array[LocationPartition]
 
-    val jc2 = ex2.jumpchain
-    val res2 = Array.range(0, 10, 1).map(i => LocationPartition(Array(i, i)))
-    assert(jc2._1 === 1)
-    assert(!arrayEqual(jc2._2, res1))
-    assert(arrayEqual(jc2._2, res2))
+  // [(0, 0), (1, 1), ..., (9, 9)]
+  val locations2 = Array.range(0, 10, 1)
+    .map(i => LocationPartition(Array(i, i)))
 
-    val jc3 = ex3.jumpchain
-    val res3 = res2
-    assert(jc3._1 === 2)
-    assert(arrayEqual(jc3._2, res3))
+  // [(0, 0), (0, 0), (1, 1), (1, 1), ..., (9, 9), (9, 9)]
+  val locations3 = locations2.flatMap(i => Array(i, i))
 
-    val jc4 = ex4.jumpchain
-    val res4 = res2 ++ res2
-    assert(jc4._1 === 3)
-    assert(arrayEqual(jc4._2, res4))
+  // [(0, 0), (0, 0), (1, 1), (1, 1), ..., (9, 9), (9, 9),
+  //  (9, 9), (9, 9), (8, 8), (8, 8), ..., (0, 0), (0, 0)]
+  val locations4 = locations3 ++ locations3.reverse
+
+  test("TrajectoryHelper.jumpchain") {
+    val jc1 = TrajectoryHelper.jumpchain(locations1)
+    val res1 = locations1
+    assert(arrayEqual(jc1, res1))
+
+    val jc2 = TrajectoryHelper.jumpchain(locations2)
+    val res2 = locations2
+    assert(arrayEqual(jc2, res2))
+
+    val jc3 = TrajectoryHelper.jumpchain(locations3)
+    val res3 = locations2
+    assert(arrayEqual(jc3, res3))
+
+    val jc4 = TrajectoryHelper.jumpchain(locations4)
+    val res4 = locations2 ++ locations2.reverse.tail
+    assert(arrayEqual(jc4, res4))
   }
 
-  test("TrajectoryGrid.jumpchainTimes") {
-    val jct1 = ex1.jumpchainTimes
+  val grids1 = Array(): Array[Grid]
+
+  val grids2 = locations2.zipWithIndex.map{
+    case (x, t) => Grid(t, x)
+  }
+
+  val grids3 = locations3.zipWithIndex.map{
+    case (x, t) => Grid(t, x)
+  }
+
+  val grids4 = locations4.zipWithIndex.map{
+    case (x, t) => Grid(t, x)
+  }
+
+  test("TrajectoryHelper.jumpchainTimes") {
+    val jct1 = TrajectoryHelper.jumpchainTimes(grids1)
     val res1 = Array(): Array[Int]
-    assert(jct1._1 === 0)
-    assert(java.util.Arrays.equals(jct1._2, res1))
+    assert(java.util.Arrays.equals(jct1, res1))
 
-    val jct2 = ex2.jumpchainTimes
-    val res2 = Array.range(0, 9, 1).map(i => 1)
-    assert(jct2._1 === 1)
-    assert(java.util.Arrays.equals(jct2._2, res2))
+    val jct2 = TrajectoryHelper.jumpchainTimes(grids2)
+    val res2 = Array.fill(9)(1)
+    assert(java.util.Arrays.equals(jct2, res2))
 
-    val jct3 = ex3.jumpchainTimes
-    val res3 = Array.range(0, 9, 1).map(i => 2)
-    assert(jct3._1 === 2)
-    assert(java.util.Arrays.equals(jct3._2, res3))
+    val jct3 = TrajectoryHelper.jumpchainTimes(grids3)
+    val res3 = Array.fill(9)(2)
+    assert(java.util.Arrays.equals(jct3, res3))
 
-    val jct4 = ex4.jumpchainTimes
-    val res4 = Array.range(0, 19, 1).map(i => 2)
-    assert(jct4._1 === 3)
-    assert(java.util.Arrays.equals(jct4._2, res4))
+    val jct4 = TrajectoryHelper.jumpchainTimes(grids4)
+    val res4 = Array.fill(9)(2) ++ (4 +: Array.fill(8)(2))
+    assert(java.util.Arrays.equals(jct4, res4))
+  }
+
+  test("TrajectoryHelper.transitions") {
+    val transitions1 = TrajectoryHelper.transitions(grids1)
+    val res1 = Array(): Array[(LocationPartition, LocationPartition, Int)]
+    assert(arrayEqual(transitions1, res1))
+
+    val transitions2 = TrajectoryHelper.transitions(grids2)
+    val res2 = locations2.sliding(2).map(s => (s(0), s(1), 1)).toArray
+    assert(arrayEqual(transitions2, res2))
+
+    val transitions3 = TrajectoryHelper.transitions(grids3)
+    val res3 = locations2.sliding(2).map(s => (s(0), s(1), 2)).toArray
+    assert(arrayEqual(transitions3, res3))
+
+    val transitions4 = TrajectoryHelper.transitions(grids4)
+    val res4 = (locations2.sliding(2).map(s => (s(0), s(1), 2)).toArray ++
+      ((LocationPartition(Array(9, 9)), LocationPartition(Array(8, 8)), 4) +:
+        locations2.reverse.tail.sliding(2).map(s => (s(0), s(1), 2)).toArray))
+    assert(arrayEqual(transitions4, res4))
   }
 }

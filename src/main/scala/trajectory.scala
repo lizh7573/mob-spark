@@ -1,4 +1,6 @@
 object TrajectoryHelper {
+  // Return the jumpchain list of locations. This is the chain of
+  // locations removing any duplicates.
   def jumpchain(locations: Array[LocationPartition]):
       Array[LocationPartition] =
     if (locations.isEmpty)
@@ -7,6 +9,9 @@ object TrajectoryHelper {
       locations(0) +: locations.sliding(2)
         .collect{ case Array(a, b) if a != b => b }.toArray
 
+  // Return the jumpchain times of a list of grid measurements. This
+  // is a list of times where each time represents the time it stays
+  // in one particular location.
   def jumpchainTimes(grids: Array[Grid]):
       Array[Int] =
     if (grids.isEmpty)
@@ -20,6 +25,10 @@ object TrajectoryHelper {
             (ts, g1)
       }._1
 
+  // Returns the list of transitions for a list of grid measurements.
+  // The list of transition consists of pairs of locations together
+  // with the time spent in the first location before going to the
+  // second.
   def transitions(grids: Array[Grid]):
       Array[(LocationPartition, LocationPartition, Int)] =
     if (grids.length < 2)

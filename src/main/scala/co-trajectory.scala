@@ -32,6 +32,15 @@ object CoTrajectoryUtils {
         .withColumnRenamed("_1", "id").withColumnRenamed("_2", "jumpchainTimes")
         .as[(Int, Array[Int])]
 
+    def transitions(partitioning: Double):
+        org.apache.spark.sql.Dataset[(LocationPartition, LocationPartition,
+          Long, Double)] =
+      cotraj.flatMap(_.transitions(partitioning)._2)
+        .groupBy("_1", "_2")
+        .agg(count("_3").alias("count"), avg("_3").alias("time"))
+        .withColumnRenamed("_1", "from")
+        .withColumnRenamed("_2", "to")
+        .as[(LocationPartition, LocationPartition, Long, Double)]
   }
 
   implicit class CoTrajectoryGrid(cotraj:
@@ -48,5 +57,15 @@ object CoTrajectoryUtils {
       cotraj.map(_.jumpchainTimes)
         .withColumnRenamed("_1", "id").withColumnRenamed("_2", "jumpchainTimes")
         .as[(Int, Array[Int])]
+
+    def transitions():
+      org.apache.spark.sql.Dataset[(LocationPartition, LocationPartition,
+        Long, Double)] =
+    cotraj.flatMap(_.transitions()._2)
+      .groupBy("_1", "_2")
+      .agg(count("_3").alias("count"), avg("_3").alias("time"))
+      .withColumnRenamed("_1", "from")
+      .withColumnRenamed("_2", "to")
+      .as[(LocationPartition, LocationPartition, Long, Double)]
   }
 }

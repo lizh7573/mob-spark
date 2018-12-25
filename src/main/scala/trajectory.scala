@@ -19,6 +19,21 @@ object TrajectoryHelper {
           else
             (ts, g1)
       }._1
+
+  def transitions(grids: Array[Grid]):
+      Array[(LocationPartition, LocationPartition, Int)] =
+    if (grids.length < 2)
+      Array()
+    else
+      grids.tail.foldLeft((Array(): Array[(LocationPartition,
+        LocationPartition, Int)], grids.head)) {
+        case ((list: Array[(LocationPartition, LocationPartition, Int)],
+          g1: Grid), g2: Grid) =>
+          if (g1.x != g2.x)
+            (list :+ (g1.x, g2.x, g2.time - g1.time), g2)
+          else
+            (list, g1)
+      }._1
 }
 
 // Holds a trajectory represented by an id and an array of measurements
@@ -36,6 +51,12 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
     (id, TrajectoryHelper
       .jumpchainTimes(measurements
         .map(m => Grid(m.time, m.x.partition(partitioning)))))
+
+  def transitions(partitioning: Double):
+      (Int, Array[(LocationPartition, LocationPartition, Int)]) =
+    (id, TrajectoryHelper
+      .transitions(measurements
+        .map(m => Grid(m.time, m.x.partition(partitioning)))))
 }
 
 // Holds a trajectory represented by an id and an array of partitions
@@ -51,4 +72,8 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
 
   def jumpchainTimes(): (Int, Array[Int]) =
     (id, TrajectoryHelper.jumpchainTimes(grids))
+
+  def transitions():
+      (Int, Array[(LocationPartition, LocationPartition, Int)]) =
+    (id, TrajectoryHelper.transitions(grids))
 }

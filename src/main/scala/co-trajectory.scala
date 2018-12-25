@@ -41,6 +41,15 @@ object CoTrajectoryUtils {
         .withColumnRenamed("_1", "from")
         .withColumnRenamed("_2", "to")
         .as[(LocationPartition, LocationPartition, Long, Double)]
+
+    def enumeratePartitions(partitioning: Double):
+        org.apache.spark.sql.Dataset[(LocationPartition, BigInt)] =
+      cotraj.flatMap(_.measurements.map(_.x.partition(partitioning)))
+        .distinct
+        .rdd
+        .zipWithIndex
+        .toDS.withColumnRenamed("_1", "x").withColumnRenamed("_2", "id")
+        .as[(LocationPartition, BigInt)]
   }
 
   implicit class CoTrajectoryGrid(cotraj:
@@ -67,5 +76,14 @@ object CoTrajectoryUtils {
       .withColumnRenamed("_1", "from")
       .withColumnRenamed("_2", "to")
       .as[(LocationPartition, LocationPartition, Long, Double)]
+
+    def enumeratePartitions():
+        org.apache.spark.sql.Dataset[(LocationPartition, BigInt)] =
+      cotraj.flatMap(_.grids)
+        .distinct
+        .rdd
+        .zipWithIndex
+        .toDS.withColumnRenamed("_1", "x").withColumnRenamed("_2", "id")
+        .as[(LocationPartition, BigInt)]
   }
 }

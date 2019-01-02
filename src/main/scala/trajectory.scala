@@ -19,7 +19,7 @@ object TrajectoryHelper {
     else
       grids.tail.foldLeft((Array(): Array[Int], grids.head)) {
         case ((ts: Array[Int], g1:Grid), g2:Grid) =>
-          if (g1.x != g2.x)
+          if (g1.location != g2.location)
             (ts :+ (g2.time - g1.time), g2)
           else
             (ts, g1)
@@ -38,8 +38,8 @@ object TrajectoryHelper {
         LocationPartition, Int)], grids.head)) {
         case ((list: Array[(LocationPartition, LocationPartition, Int)],
           g1: Grid), g2: Grid) =>
-          if (g1.x != g2.x)
-            (list :+ (g1.x, g2.x, g2.time - g1.time), g2)
+          if (g1.location != g2.location)
+            (list :+ (g1.location, g2.location, g2.time - g1.time), g2)
           else
             (list, g1)
       }._1
@@ -54,18 +54,18 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 
   def jumpchain(partitioning: Double): (Int, Array[LocationPartition]) =
     (id, TrajectoryHelper
-      .jumpchain(measurements.map(_.x.partition(partitioning))))
+      .jumpchain(measurements.map(_.location.partition(partitioning))))
 
   def jumpchainTimes(partitioning: Double): (Int, Array[Int]) =
     (id, TrajectoryHelper
       .jumpchainTimes(measurements
-        .map(m => Grid(m.time, m.x.partition(partitioning)))))
+        .map(m => Grid(m.time, m.location.partition(partitioning)))))
 
   def transitions(partitioning: Double):
       (Int, Array[(LocationPartition, LocationPartition, Int)]) =
     (id, TrajectoryHelper
       .transitions(measurements
-        .map(m => Grid(m.time, m.x.partition(partitioning)))))
+        .map(m => Grid(m.time, m.location.partition(partitioning)))))
 }
 
 // Holds a trajectory represented by an id and an array of partitions
@@ -77,7 +77,7 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
   def normalize() = TrajectoryGrid(id, grids.sortBy(_.time))
 
   def jumpchain(): (Int, Array[LocationPartition]) =
-    (id, TrajectoryHelper.jumpchain(grids.map(_.x)))
+    (id, TrajectoryHelper.jumpchain(grids.map(_.location)))
 
   def jumpchainTimes(): (Int, Array[Int]) =
     (id, TrajectoryHelper.jumpchainTimes(grids))

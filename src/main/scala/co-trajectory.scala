@@ -44,11 +44,11 @@ object CoTrajectoryUtils {
 
     def enumeratePartitions(partitioning: Double):
         org.apache.spark.sql.Dataset[(LocationPartition, BigInt)] =
-      cotraj.flatMap(_.measurements.map(_.x.partition(partitioning)))
+      cotraj.flatMap(_.measurements.map(_.location.partition(partitioning)))
         .distinct
         .rdd
         .zipWithIndex
-        .toDS.withColumnRenamed("_1", "x").withColumnRenamed("_2", "id")
+        .toDS.withColumnRenamed("_1", "location").withColumnRenamed("_2", "id")
         .as[(LocationPartition, BigInt)]
   }
 
@@ -83,7 +83,7 @@ object CoTrajectoryUtils {
         .distinct
         .rdd
         .zipWithIndex
-        .toDS.withColumnRenamed("_1", "x").withColumnRenamed("_2", "id")
+        .toDS.withColumnRenamed("_1", "location").withColumnRenamed("_2", "id")
         .as[(LocationPartition, BigInt)]
   }
 }

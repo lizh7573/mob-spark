@@ -11,7 +11,7 @@ object Preprocess {
    */
   def keepBox(data: org.apache.spark.sql.Dataset[MeasurementID],
     box: Array[(Double, Double)]): org.apache.spark.sql.Dataset[MeasurementID] = {
-    return data.filter(_.measurement.x.isInBox(box))
+    return data.filter(_.measurement.location.isInBox(box))
   }
 
   /**

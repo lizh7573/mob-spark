@@ -50,6 +50,13 @@ object CoTrajectoryUtils {
         .zipWithIndex
         .toDS.withColumnRenamed("_1", "location").withColumnRenamed("_2", "id")
         .as[(LocationPartition, BigInt)]
+
+    def mapMatch(): org.apache.spark.sql.Dataset[Trajectory] =
+      cotraj.mapPartitions{partition =>
+          val mm = GraphHopperHelper.getMapMatcher
+
+          partition.map(_.mapMatch(mm))
+        }
   }
 
   implicit class CoTrajectoryGrid(cotraj:

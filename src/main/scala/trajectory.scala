@@ -1,3 +1,11 @@
+import com.graphhopper.util.GPXEntry
+
+import scala.collection.JavaConverters._
+
+import scala.util.{Try, Success, Failure}
+
+import org.apache.spark.sql.functions._
+
 object TrajectoryHelper {
   // Return the jumpchain list of locations. This is the chain of
   // locations removing any duplicates.
@@ -50,7 +58,7 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
   /* The methods for Trajectory assumes that the array of Measurements
    * is sorted with respect to time. This method makes sure that this
    * is the case.*/
-  def normalize() = Trajectory(id, measurements.sortBy(_.time))
+  def normalize(): Trajectory = Trajectory(id, measurements.sortBy(_.time))
 
   def jumpchain(partitioning: Double): (Int, Array[LocationPartition]) =
     (id, TrajectoryHelper
@@ -66,6 +74,32 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
     (id, TrajectoryHelper
       .transitions(measurements
         .map(m => Grid(m.time, m.location.partition(partitioning)))))
+
+  def mapMatch(mm: com.graphhopper.matching.MapMatching =
+    GraphHopperHelper.getMapMatcher): Trajectory = {
+
+    val gpxEntries = measurements
+      .map{
+        m => new GPXEntry(m.location.latitude, m.location.longitude, m.time)}
+      .toList
+      .asJava
+
+    val mr = Try(mm.doWork(gpxEntries))
+
+    val matchedLocations = mr match {
+      case Success(result) => GraphHopperHelper.extractLocations(result)
+      case Failure(_) => Array(): Array[Location] // When no match can be made
+    }
+
+    /* The time for the measurements are lost in the map matching. Instead
+     * of trying to recreate reasonable times we here just use a time
+     * starting at 0 and increasing by one for every measurement. */
+    val matchedMeasurements = matchedLocations
+      .zipWithIndex
+      .map{case (location, time) => Measurement(time, location)}
+
+    Trajectory(id, matchedMeasurements)
+  }
 }
 
 // Holds a trajectory represented by an id and an array of partitions

@@ -5,6 +5,10 @@ case class Location(x: Array[Double]) {
       case _ => false
     }
 
+  def longitude() = x(0)
+
+  def latitude() = x(1)
+
   def partition(partitioning: Double): LocationPartition =
     LocationPartition(x.map(i => (i/partitioning).toInt))
 

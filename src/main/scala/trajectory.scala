@@ -1,5 +1,7 @@
 import com.graphhopper.util.GPXEntry
 
+import spray.json._
+
 import scala.collection.JavaConverters._
 
 import scala.util.{Try, Success, Failure}
@@ -115,6 +117,15 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 
     Trajectory(id, matchedMeasurements)
   }
+
+  import Visualize.LonLatJsonProtocol._
+
+  def toJson(): String =
+    Visualize.LonLatJson(coordinates =
+      measurements.map(m => (m.location.longitude, m.location.latitude)))
+    .toJson
+    .prettyPrint
+
 }
 
 /* Holds a trajectory represented by an id and an array of partitions */

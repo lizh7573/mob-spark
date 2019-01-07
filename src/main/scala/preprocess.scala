@@ -5,7 +5,9 @@ object Preprocess {
 
   import SparkSessionHolder.spark.implicits._
 
-  val box = Array((115.0, 117.0), (39.0, 41.0))
+  val boxBeijing = Array((115.0, 117.0), (39.0, 41.0))
+  val boxSanFransisco = Array((-122.449, -122.397), (37.747, 37.772))
+
   /**
     * Keep only measurements whose location is inside the given box.
    */

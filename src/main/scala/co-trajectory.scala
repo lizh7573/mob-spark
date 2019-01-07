@@ -74,11 +74,12 @@ object CoTrajectoryUtils {
 
     /* Return a map matched version of the co-trajectory. Every trajectory
      * is replaced with its map matched version. */
-    def mapMatch(): CoTrajectory = cotraj.mapPartitions{partition =>
-          val mm = GraphHopperHelper.getMapMatcher
+    def mapMatch(): org.apache.spark.sql.Dataset[Trajectory] =
+      cotraj.mapPartitions{partition =>
+        val mm = GraphHopperHelper.getMapMatcher
 
-          partition.map(_.mapMatch(mm))
-        }
+        partition.map(_.mapMatch(mm))
+      }
   }
 
   /* An implicit class for a co-trajectory consisting of grid

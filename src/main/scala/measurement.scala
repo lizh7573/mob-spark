@@ -1,8 +1,8 @@
-case class Measurement(time: Int, location: Location) {
+case class Measurement(time: Long, location: Location) {
   def partition(partitioning: (Double, Double)): Grid = {
     val (timePartitioning, locationPartitioning) = partitioning
 
-    val timePartition = (time/timePartitioning).toInt
+    val timePartition = (time/timePartitioning).toLong
     val locationPartition = location.partition(locationPartitioning)
 
     Grid(timePartition, locationPartition)
@@ -17,7 +17,7 @@ case class MeasurementID(id: Int, measurement: Measurement) {
 }
 
 // Holds parition id for time and location
-case class Grid(time: Int, location: LocationPartition)
+case class Grid(time: Long, location: LocationPartition)
 
 // Holds an id together with a measurement
 case class GridID(id: Int, grid: Grid)

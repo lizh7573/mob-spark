@@ -20,7 +20,7 @@ object Parse {
     val data = spark.read.textFile(dataFile).map{ line =>
       val parts = line.split(",")
       val id = parts(0).toInt
-      val t = (format.parse(parts(1)).getTime/1000).toInt
+      val t = (format.parse(parts(1)).getTime/1000).toLong
       val x = Location(Array(parts(2).toDouble, parts(3).toDouble))
       MeasurementID(id, Measurement(t, x))
     }
@@ -36,7 +36,7 @@ object Parse {
     val data = spark.read.textFile(dataFile).map{ line =>
       val parts = line.split("\t")
       val id = parts(0).toInt
-      val t = (format.parse(parts(1)).getTime/1000).toInt
+      val t = (format.parse(parts(1)).getTime/1000).toLong
       val x = Location(Array(parts(3).toDouble, parts(2).toDouble))
       MeasurementID(id, Measurement(t, x))
     }

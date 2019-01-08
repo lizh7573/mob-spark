@@ -28,12 +28,12 @@ object TrajectoryHelper {
    * a list of times where each time represents the time it stays in
    * one particular location. */
   def jumpchainTimes(grids: Array[Grid]):
-      Array[Int] =
+      Array[Long] =
     if (grids.isEmpty)
       Array()
     else
-      grids.tail.foldLeft((Array(): Array[Int], grids.head)) {
-        case ((ts: Array[Int], g1:Grid), g2:Grid) =>
+      grids.tail.foldLeft((Array(): Array[Long], grids.head)) {
+        case ((ts: Array[Long], g1:Grid), g2:Grid) =>
           if (g1.location != g2.location)
             (ts :+ (g2.time - g1.time), g2)
           else
@@ -45,13 +45,13 @@ object TrajectoryHelper {
    * the time spent in the first location before going to the
    * second. */
   def transitions(grids: Array[Grid]):
-      Array[(LocationPartition, LocationPartition, Int)] =
+      Array[(LocationPartition, LocationPartition, Long)] =
     if (grids.length < 2)
       Array()
     else
       grids.tail.foldLeft((Array(): Array[(LocationPartition,
-        LocationPartition, Int)], grids.head)) {
-        case ((list: Array[(LocationPartition, LocationPartition, Int)],
+        LocationPartition, Long)], grids.head)) {
+        case ((list: Array[(LocationPartition, LocationPartition, Long)],
           g1: Grid), g2: Grid) =>
           if (g1.location != g2.location)
             (list :+ (g1.location, g2.location, g2.time - g1.time), g2)
@@ -80,7 +80,7 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 
     val date = format.parse(dateStr)
 
-    val start = (date.getTime/1000).toInt
+    val start = (date.getTime/1000).toLong
     val end = start + 24*60*60
 
     /* Consider using a binary search to find the region for the date.
@@ -99,7 +99,7 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
   /* Return the jumpchain times of a trajectory. This is a list of times
    * where each time represents the time the trajectory stays in one
    * particular location. */
-  def jumpchainTimes(partitioning: Double): (Int, Array[Int]) =
+  def jumpchainTimes(partitioning: Double): (Int, Array[Long]) =
     (id, TrajectoryHelper
       .jumpchainTimes(measurements
         .map(m => Grid(m.time, m.location.partition(partitioning)))))
@@ -108,7 +108,7 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
    * transition consists of pairs of locations together with the time
    * spent in the first location before going to the second. */
   def transitions(partitioning: Double):
-      (Int, Array[(LocationPartition, LocationPartition, Int)]) =
+      (Int, Array[(LocationPartition, LocationPartition, Long)]) =
     (id, TrajectoryHelper
       .transitions(measurements
         .map(m => Grid(m.time, m.location.partition(partitioning)))))
@@ -169,13 +169,13 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
   /* Return the jumpchain times of a trajectory. This is a list of times
    * where each time represents the time the trajectory stays in one
    * particular location. */
-  def jumpchainTimes(): (Int, Array[Int]) =
+  def jumpchainTimes(): (Int, Array[Long]) =
     (id, TrajectoryHelper.jumpchainTimes(grids))
 
   /* Return the list of transitions for a trajectory. The list of
    * transition consists of pairs of locations together with the time
    * spent in the first location before going to the second. */
   def transitions():
-      (Int, Array[(LocationPartition, LocationPartition, Int)]) =
+      (Int, Array[(LocationPartition, LocationPartition, Long)]) =
     (id, TrajectoryHelper.transitions(grids))
 }

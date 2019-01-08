@@ -55,39 +55,41 @@ class TrajectoryHelperTest extends org.scalatest.FunSuite {
 
   test("TrajectoryHelper.jumpchainTimes") {
     val jct1 = TrajectoryHelper.jumpchainTimes(grids1)
-    val res1 = Array(): Array[Int]
+    val res1 = Array(): Array[Long]
     assert(java.util.Arrays.equals(jct1, res1))
 
     val jct2 = TrajectoryHelper.jumpchainTimes(grids2)
-    val res2 = Array.fill(9)(1)
+    val res2 = Array.fill(9)(1L)
     assert(java.util.Arrays.equals(jct2, res2))
 
     val jct3 = TrajectoryHelper.jumpchainTimes(grids3)
-    val res3 = Array.fill(9)(2)
+    val res3 = Array.fill(9)(2L)
     assert(java.util.Arrays.equals(jct3, res3))
 
     val jct4 = TrajectoryHelper.jumpchainTimes(grids4)
-    val res4 = Array.fill(9)(2) ++ (4 +: Array.fill(8)(2))
+    val res4 = Array.fill(9)(2L) ++ (4L +: Array.fill(8)(2L))
     assert(java.util.Arrays.equals(jct4, res4))
   }
 
   test("TrajectoryHelper.transitions") {
     val transitions1 = TrajectoryHelper.transitions(grids1)
-    val res1 = Array(): Array[(LocationPartition, LocationPartition, Int)]
+    val res1 = Array(): Array[(LocationPartition, LocationPartition, Long)]
     assert(arrayEqual(transitions1, res1))
 
     val transitions2 = TrajectoryHelper.transitions(grids2)
-    val res2 = locations2.sliding(2).map(s => (s(0), s(1), 1)).toArray
+    val res2 = locations2.sliding(2).map(s => (s(0), s(1), 1L)).toArray
     assert(arrayEqual(transitions2, res2))
 
     val transitions3 = TrajectoryHelper.transitions(grids3)
-    val res3 = locations2.sliding(2).map(s => (s(0), s(1), 2)).toArray
+    val res3 = locations2.sliding(2).map(s => (s(0), s(1), 2L)).toArray
     assert(arrayEqual(transitions3, res3))
 
     val transitions4 = TrajectoryHelper.transitions(grids4)
-    val res4 = (locations2.sliding(2).map(s => (s(0), s(1), 2)).toArray ++
-      ((LocationPartition(Array(9, 9)), LocationPartition(Array(8, 8)), 4) +:
-        locations2.reverse.tail.sliding(2).map(s => (s(0), s(1), 2)).toArray))
+    val res4 = (locations2.sliding(2).map(s => (s(0), s(1), 2L)).toArray ++
+      ((LocationPartition(Array(9, 9)),
+        LocationPartition(Array(8, 8)), 4L) +:
+        locations2.reverse.tail.sliding(2)
+        .map(s => (s(0), s(1), 2L)).toArray))
     assert(arrayEqual(transitions4, res4))
   }
 }

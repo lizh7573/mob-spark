@@ -27,6 +27,10 @@ object CoTrajectoryUtils {
   implicit class CoTrajectory(cotraj:
       org.apache.spark.sql.Dataset[Trajectory]) {
 
+    /* Return a Dataset of all measurements in the co-trajectory. */
+    def measurements(): org.apache.spark.sql.Dataset[MeasurementID] =
+      cotraj.flatMap((r => r.measurements.map(m => MeasurementID(r.id, m))))
+
     /* Return a Dataset with the jumpchains of the co-trajectory's
      * trajectories. The jumpchain of a trajectory is the chain of
      * locations for the trajectory, removing any succesive
@@ -87,6 +91,10 @@ object CoTrajectoryUtils {
    * implemented here.*/
   implicit class CoTrajectoryGrid(cotraj:
       org.apache.spark.sql.Dataset[TrajectoryGrid]) {
+
+    /* Return a Dataset of all grids in the co-trajectory. */
+    def measurements(): org.apache.spark.sql.Dataset[GridID] =
+      cotraj.flatMap((r => r.grids.map(m => GridID(r.id, m))))
 
     /* Return a Dataset of with the jumpchains of the co-trajectorys
      * trajectories. The jumpchain of a trajectory is the chain of

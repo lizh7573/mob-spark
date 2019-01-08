@@ -3,8 +3,10 @@ import com.graphhopper.util.GPXEntry
 import spray.json._
 
 import scala.collection.JavaConverters._
-
 import scala.util.{Try, Success, Failure}
+
+import java.text.SimpleDateFormat
+import java.util.Date
 
 import org.apache.spark.sql.functions._
 
@@ -64,6 +66,28 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
    * is sorted with respect to time. This method makes sure that this
    * is the case.*/
   def normalize(): Trajectory = Trajectory(id, measurements.sortBy(_.time))
+
+  /* Return the TrajectoryGrid given by getting the partition for all
+   * measurements in the trajectory. */
+  def partition(partitioning: (Double, Double)): TrajectoryGrid =
+    TrajectoryGrid(id, measurements.map(_.partition(partitioning)))
+
+  /* Keep only the measurements occurring on the given date. The date
+   * should be given as a string in the format yyyy-MM-dd. This method
+   * assumes that the time for the measurements is Unix-time. */
+  def filterDate(dateStr: String): Trajectory = {
+    val format = new SimpleDateFormat("yyyy-MM-dd")
+
+    val date = format.parse(dateStr)
+
+    val start = (date.getTime/1000).toInt
+    val end = start + 24*60*60
+
+    /* Consider using a binary search to find the region for the date.
+     * This would likely be a performance improvement for long
+     * trajectories. */
+    Trajectory(id, measurements.filter(m => m.time >= start && m.time < end))
+  }
 
   /* Return the jumpchain of the trajectory. This is the chain of
    * locations for the trajectory, removing any succesive

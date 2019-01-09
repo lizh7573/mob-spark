@@ -31,6 +31,18 @@ object CoTrajectoryUtils {
     def measurements(): org.apache.spark.sql.Dataset[MeasurementID] =
       cotraj.flatMap((r => r.measurements.map(m => MeasurementID(r.id, m))))
 
+    /* Split a co-trajectory into several co-trajectories where each one
+     * only contains measurements for a single date. Returns an array
+     * of tuples where the first element corresponds to the Unix-time
+     * of the beginning of the date and the second element to the
+     * corresponding co-trajectory. */
+    def splitByDate(): Array[(Long, org.apache.spark.sql.Dataset[Trajectory])] = {
+      val grouped = cotraj.flatMap(_.splitByDate)
+      val dates = grouped.map(_._1).distinct.collect
+
+      dates.map(date => (date, grouped.filter(_._1 == date).map(_._2)))
+    }
+
     /* Return a Dataset with the jumpchains of the co-trajectory's
      * trajectories. The jumpchain of a trajectory is the chain of
      * locations for the trajectory, removing any succesive

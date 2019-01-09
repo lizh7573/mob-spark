@@ -89,6 +89,18 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
     Trajectory(id, measurements.filter(m => m.time >= start && m.time < end))
   }
 
+  /* Splits the measurements of the array by their date. This method
+   * assumes that the time for the measurements is Unix-time. Returns
+   * an array of tuples where the first element corresponds to the
+   * Unix-time for the beginning of the date and the second element to
+   * the corresponding trajectory. Notice that all returned
+   * trajectories keep the same id as the original. */
+  def splitByDate(): Array[(Long, Trajectory)] =
+    measurements
+      .groupBy(m => m.time - m.time%(24*60*60))
+      .toArray
+      .map(g => (g._1, Trajectory(id, g._2)))
+
   /* Return the jumpchain of the trajectory. This is the chain of
    * locations for the trajectory, removing any succesive
    * duplicates. */

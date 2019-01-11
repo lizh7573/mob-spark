@@ -82,6 +82,21 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
   def partition(partitioning: (Double, Double)): TrajectoryGrid =
     TrajectoryGrid(id, measurements.map(_.partition(partitioning)))
 
+  /* Return the TrajectoryGrid given by getting the partition for all
+   * measurements in the trajectory. For each time partition it only
+   * keeps one measurement, the first one in the list. */
+  def partitionDistinct(partitioning: (Double, Double)): TrajectoryGrid = {
+    val grids = measurements.map(_.partition(partitioning))
+
+    if (grids.isEmpty)
+      TrajectoryGrid(id, grids)
+    else
+      TrajectoryGrid(id, grids.head +: grids
+        .sliding(2)
+        .collect{case Array(g1, g2) if g1.time != g2.time => g2}
+        .toArray)
+  }
+
   /* Keep only the measurements occurring on the given date. The date
    * should be given as a string in the format yyyy-MM-dd. This method
    * assumes that the time for the measurements is Unix-time. */

@@ -5,6 +5,8 @@ case class Location(x: Array[Double]) {
       case _ => false
     }
 
+  override def toString = "[" + x.mkString(", ")+ "]"
+
   def longitude() = x(0)
 
   def latitude() = x(1)
@@ -25,4 +27,6 @@ case class LocationPartition(x: Array[Int]) {
       case that: LocationPartition => java.util.Arrays.equals(x, that.x)
       case _ => false
     }
+
+  override def toString = "[" + x.mkString(", ")+ "]"
 }

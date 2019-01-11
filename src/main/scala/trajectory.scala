@@ -62,6 +62,16 @@ object TrajectoryHelper {
 
 /* Holds a trajectory represented by an id and an array of measurements */
 case class Trajectory(id: Int, measurements: Array[Measurement]) {
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: Trajectory => id == that.id &&
+        measurements.length == that.measurements.length &&
+        measurements.zip(that.measurements).forall{
+          case (i, j) => i == j
+        }
+      case _ => false
+    }
+
   /* The methods for Trajectory assumes that the array of Measurements
    * is sorted with respect to time. This method makes sure that this
    * is the case.*/
@@ -166,6 +176,15 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 
 /* Holds a trajectory represented by an id and an array of partitions */
 case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: TrajectoryGrid => id == that.id &&
+        grids.length == that.grids.length &&
+        grids.zip(that.grids).forall{
+          case (i, j) => i == j
+        }
+      case _ => false
+    }
 
   /* The methods for TrajectoryGrid assumes that the array of Grids is
    * sorted with respect to time. This method makes sure that this is

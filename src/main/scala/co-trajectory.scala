@@ -152,5 +152,17 @@ object CoTrajectoryUtils {
         .zipWithIndex
         .toDS.withColumnRenamed("_1", "location").withColumnRenamed("_2", "id")
         .as[(LocationPartition, BigInt)]
+
+    /* Return the list of all swaps to apply when performing Swapmob. This
+     * methods assumes that no trajectory has several measurements in
+     * the same time interval. This can be assured by partitioning the
+     * trajectories with partitionDistinct instead of just partition. */
+    def swaps(): org.apache.spark.sql.Dataset[Swap] =
+      cotraj
+        .measurements
+        .groupBy("grid")
+        .agg(collect_set($"id").alias("ids"))
+        .as[Swap]
+        .filter(_.ids.length > 1)
   }
 }

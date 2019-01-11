@@ -1,4 +1,7 @@
+/* Holds a measurement determined by a time and a location. In
+ * general the time represents Unix-time. */
 case class Measurement(time: Long, location: Location) {
+  /* Compute the partition that the measurement belongs to. */
   def partition(partitioning: (Double, Double)): Grid = {
     val (timePartitioning, locationPartitioning) = partitioning
 

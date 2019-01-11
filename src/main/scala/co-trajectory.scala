@@ -142,6 +142,8 @@ object CoTrajectoryUtils {
       .withColumnRenamed("_2", "to")
       .as[(LocationPartition, LocationPartition, Long, Double)]
 
+    /* Returns an enumeration of all the partitions occurring in the
+     * co-trajectory. */
     def enumeratePartitions():
         org.apache.spark.sql.Dataset[(LocationPartition, BigInt)] =
       cotraj.flatMap(_.grids)

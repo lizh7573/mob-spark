@@ -114,31 +114,31 @@ class TrajectoryTest extends org.scalatest.FunSuite {
     .map{case (m, i) => Measurement(i, m)})
 
   test("Trajectory.partitionDistinct") {
-    val grid1 = trajectory1.partitionDistinct((2.0, 5.0))
+    val grid1 = trajectory1.partitionDistinct((2L, 5.0))
     val res1 = TrajectoryGrid(1, Array(): Array[Grid])
     assert(grid1 == res1)
 
-    val grid2 = trajectory2.partitionDistinct((1.0, 5.0))
-    val res2 = trajectory2.partition((1.0, 5.0))
+    val grid2 = trajectory2.partitionDistinct((1L, 5.0))
+    val res2 = trajectory2.partition((1L, 5.0))
     assert(grid2 == res2)
 
-    val grid3 = trajectory2.partitionDistinct((2.0, 5.0))
+    val grid3 = trajectory2.partitionDistinct((2L, 5.0))
     val res3 = TrajectoryGrid(2, trajectory2
       .measurements
       .filter(_.time % 2 == 0)
-      .map(_.partition((2.0, 5.0))))
+      .map(_.partition((2L, 5.0))))
     assert(grid3 == res3)
 
-    val grid4 = trajectory3.partitionDistinct((1.0, 5.0))
-    val res4 = trajectory3.partition((1.0, 5.0))
+    val grid4 = trajectory3.partitionDistinct((1L, 5.0))
+    val res4 = trajectory3.partition((1L, 5.0))
 
     assert(grid4 == res4)
 
-    val grid5 = trajectory3.partitionDistinct((2.0, 5.0))
+    val grid5 = trajectory3.partitionDistinct((2L, 5.0))
     val res5 = TrajectoryGrid(3, trajectory3
       .measurements
       .filter(_.time % 2 == 0)
-      .map(_.partition((2.0, 5.0))))
+      .map(_.partition((2L, 5.0))))
     assert(grid5 == res5)
   }
 }

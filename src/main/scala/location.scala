@@ -29,4 +29,7 @@ case class LocationPartition(x: Array[Int]) {
     }
 
   override def toString = "[" + x.mkString(", ")+ "]"
+
+  def unpartition(partitioning: Double): Location =
+    Location(x.map(i => (i + 0.5)*partitioning))
 }

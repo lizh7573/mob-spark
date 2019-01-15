@@ -79,13 +79,13 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 
   /* Return the TrajectoryGrid given by getting the partition for all
    * measurements in the trajectory. */
-  def partition(partitioning: (Double, Double)): TrajectoryGrid =
+  def partition(partitioning: (Long, Double)): TrajectoryGrid =
     TrajectoryGrid(id, measurements.map(_.partition(partitioning)))
 
   /* Return the TrajectoryGrid given by getting the partition for all
    * measurements in the trajectory. For each time partition it only
    * keeps one measurement, the first one in the list. */
-  def partitionDistinct(partitioning: (Double, Double)): TrajectoryGrid = {
+  def partitionDistinct(partitioning: (Long, Double)): TrajectoryGrid = {
     val grids = measurements.map(_.partition(partitioning))
 
     if (grids.isEmpty)
@@ -205,6 +205,11 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
    * sorted with respect to time. This method makes sure that this is
    * the case.*/
   def normalize() = TrajectoryGrid(id, grids.sortBy(_.time))
+
+  /* Return the Trajectory given by unpartitioning all grids in the
+   * trajectory. */
+  def partition(partitioning: (Long, Double)): Trajectory =
+    Trajectory(id, measurements.map(_.unpartition(partitioning)))
 
   /* Return the jumpchain of the trajectory. This is the chain of
    * locations for the trajectory, removing any succesive

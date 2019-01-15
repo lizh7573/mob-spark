@@ -11,9 +11,9 @@ object Swapmob {
   type Grids = org.apache.spark.sql.Dataset[GridID]
   type Swaps = org.apache.spark.sql.Dataset[Swap]
 
-  val partitioning: (Double, Double) = (60, 0.001)
+  val partitioning: (Long, Double) = (60, 0.001)
 
-  def partition(data: Measurements, partitioning: (Double, Double)): Grids = {
+  def partition(data: Measurements, partitioning: (Long, Double)): Grids = {
     return data.map(_.partition(partitioning))
   }
 

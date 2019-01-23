@@ -208,8 +208,8 @@ case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
 
   /* Return the Trajectory given by unpartitioning all grids in the
    * trajectory. */
-  def partition(partitioning: (Long, Double)): Trajectory =
-    Trajectory(id, measurements.map(_.unpartition(partitioning)))
+  def unpartition(partitioning: (Long, Double)): Trajectory =
+    Trajectory(id, grids.map(_.unpartition(partitioning)))
 
   /* Return the jumpchain of the trajectory. This is the chain of
    * locations for the trajectory, removing any succesive

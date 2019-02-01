@@ -1,5 +1,5 @@
-/* SimpleApp.scala */
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.Dataset
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -13,7 +13,7 @@ object Parse {
 
   val sanFransiscoFile = "/home/urathai/Datasets/public/San Fransisco/all.tsv"
 
-  def beijing(dataFile: String): org.apache.spark.sql.Dataset[MeasurementID] = {
+  def beijing(dataFile: String): Dataset[MeasurementID] = {
 
     val format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
@@ -28,8 +28,7 @@ object Parse {
     return data
   }
 
-  def sanFransisco(dataFile: String):
-      org.apache.spark.sql.Dataset[MeasurementID] = {
+  def sanFransisco(dataFile: String): Dataset[MeasurementID] = {
 
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
 
@@ -44,8 +43,7 @@ object Parse {
     return data
   }
 
-  def testCoTrajectory(dataFile: String):
-      org.apache.spark.sql.Dataset[Trajectory] =
+  def testCoTrajectory(dataFile: String): Dataset[Trajectory] =
     CoTrajectoryUtils.getCoTrajectory(
       spark.read.textFile(dataFile)
         .map{ line =>

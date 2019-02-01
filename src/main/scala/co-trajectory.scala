@@ -157,12 +157,14 @@ object CoTrajectoryUtils {
      * methods assumes that no trajectory has several measurements in
      * the same time interval. This can be assured by partitioning the
      * trajectories with partitionDistinct instead of just partition. */
-    def swaps(): org.apache.spark.sql.Dataset[Swap] =
+    def swaps(partitioning: Long):
+        org.apache.spark.sql.Dataset[Swap] =
       cotraj
         .measurements
         .groupBy("grid")
         .agg(collect_set($"id").alias("ids"))
-        .as[Swap]
-        .filter(_.ids.length > 1)
+        .filter(size($"ids") > 1)
+        .as[(Grid, Array[Int])]
+        .map{case (grid, ids) => Swap((grid.time + 1L)*partitioning, ids)}
   }
 }

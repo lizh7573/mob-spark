@@ -18,7 +18,7 @@ object SwapmobStatistics
   def swapTimes(swaps: Swaps):
       org.apache.spark.sql.Dataset[(Int, Array[Int])] = {
     return swaps
-      .flatMap(s => s.ids.map(id => (id, s.grid.time)))
+      .flatMap(s => s.ids.map(id => (id, s.time)))
       .withColumnRenamed("_1", "id")
       .groupBy("id")
       .agg(collect_list("_2").alias("times"))

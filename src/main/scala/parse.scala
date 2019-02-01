@@ -43,4 +43,17 @@ object Parse {
 
     return data
   }
+
+  def testCoTrajectory(dataFile: String):
+      org.apache.spark.sql.Dataset[Trajectory] =
+    CoTrajectoryUtils.getCoTrajectory(
+      spark.read.textFile(dataFile)
+        .map{ line =>
+          val parts = line.split(",")
+          val id = parts(0).toInt
+          val t = parts(1).toLong
+          val x = Location(Array(parts(2).toDouble))
+          MeasurementID(id, Measurement(t, x))
+        }
+    )
 }

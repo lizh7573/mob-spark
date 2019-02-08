@@ -51,8 +51,73 @@ object Swapmob {
           .map(vIDs => Edge(vIDs(0), vIDs(1), id))}
 
       Graph(vertices.rdd, edges.rdd)
-
     }
+  }
 
+  /* Returns a graph holding data about the number of possible paths.
+   * The input consists of the graph to consider together with a list
+   * of vertices that are possible starting vertices for the paths.
+   * The returned graph holds the same data as the original graph
+   * together with information about how many paths starting from any
+   * of the starting vertices and ending at the current vertex there
+   * are. If reverse is set to true the paths are considered in the
+   * opposite direction. The argument maxIter is used to set the
+   * maximum number of iteration in the Pregel program used for the
+   * computations. */
+  def numPaths(graph: Graph[Swap, Int],
+    startVertices: Array[Long],
+    reverse: Boolean = false,
+    maxIter: Int = Int.MaxValue):
+      Graph[(Swap, Map[(Long, Int), Long]), Int] = {
+
+    /* The number of paths to a vertex is represented by a map which maps
+     * incoming edges (represented by the vertex Id for other end of
+     * the edge and the edge's id) to number of paths coming from that
+     * edge. */
+
+    /* Initialize all vertices with the empty map, except the starting
+     * verices for which it maps an artifical edge to 1. */
+    /* TODO: Optimize this by doing storing startVertices in an RDD and
+     * doing a join. */
+    val g: Graph[(Swap, Map[(Long, Int), Long]), Int] =
+      graph.mapVertices{case (vId, swap) =>
+        (swap,
+          if (startVertices.contains(vId))
+            Map((vId, -1) -> 1L).withDefaultValue(0L)
+          else
+            Map().withDefaultValue(0L)
+        )
+      }
+
+    val g2: Graph[(Swap, Map[(Long, Int), Long]), Int] =
+      g.pregel(Map(): Map[(Long, Int), Long], maxIter)(
+        // Update vertices by updating the map with the new
+        // information.
+        (id, value, message) => (value._1, value._2 ++ message),
+        // Send the number of paths to this vertex to neighbours which
+        // do not have the updated information. If reverese is set to
+        // true it sends the information backwards in the graph.
+        triplet => {
+          if (!reverse) {
+            if (triplet.srcAttr._2.values.sum
+              > triplet.dstAttr._2((triplet.srcId, triplet.attr)))
+              Iterator((triplet.dstId,
+                Map((triplet.srcId, triplet.attr) -> triplet.srcAttr._2.values.sum)))
+            else
+              Iterator.empty
+          } else {
+            if (triplet.dstAttr._2.values.sum
+              > triplet.srcAttr._2((triplet.dstId, triplet.attr)))
+              Iterator((triplet.srcId,
+                Map((triplet.dstId, triplet.attr) -> triplet.dstAttr._2.values.sum)))
+            else
+              Iterator.empty
+          }
+
+        },
+        _ ++ _
+      )
+
+    g2
   }
 }

@@ -36,7 +36,9 @@ object Swapmob {
         .withColumn("vertexID", monotonically_increasing_id())
         .as[(Long, Array[Int], Long)]
         .map{case (time, ids, vertexID) => (vertexID, Swap(time, ids))}
+        .cache
 
+      vertices.count
 
       val edges: Dataset[Edge[Int]] = ids
         .joinWith(vertices, array_contains(vertices.col("_2").getField("ids"), ids.col("id")))

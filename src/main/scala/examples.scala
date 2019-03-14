@@ -1,6 +1,7 @@
 import CoTrajectoryUtils._
 import Swapmob._
 import org.apache.spark.graphx._
+import scalax.chart.api._
 
 object Examples {
   val spark = SparkSessionHolder.spark
@@ -63,7 +64,6 @@ object Examples {
      * Give the number of paths passing through that measurement,
      * given by the product of paths goint from it and paths going to
      * it. */
-
     val m = Measurement(65L, Location(Array(2.5)))
 
     // Find the id of the trajectory that m belongs to
@@ -108,6 +108,9 @@ object Examples {
     println("Number of possible paths after m: " + pathsAfter.toString)
     println("Total number of paths passing through m: " + (pathsBefore*pathsAfter).toString)
 
+    /* Given that we know the first and last measurement of a trajectory,
+     * give the number of possible paths between them. Do this for all
+     * original trajectories. */
     println("Number of paths starting and ending at the same vertices as trajectory i:")
 
     ids.collect.sorted.foreach{ id =>
@@ -126,6 +129,7 @@ object Examples {
         ._1
 
       val g4 = Swapmob.numPaths(graph, Array(startVertex))
+
       println("i = " + id.toString + ": " + g4.
         vertices
         .filter(_._1 == endVertex)
@@ -133,8 +137,132 @@ object Examples {
         .reduce(_+_)
         .toString
       )
-
-
     }
+  }
+
+  /* An example with the co-trajectory from the T-drive dataset. It
+   * parses the co-trajectory and gives some basic stats about it. It
+   * then computes the possible swaps and again give some basic
+   * stats. */
+  def example2() = {
+    val cotraj = CoTrajectoryUtils.getCoTrajectory(
+      Preprocess.dropShort(
+        Preprocess.keepBox(
+          Parse.beijing(Parse.beijingFileSome),
+          Preprocess.boxBeijing),
+        10))
+      .cache
+
+    val ids = cotraj.select($"id").as[Int].cache
+
+    println("Number of trajectories: " + ids.count.toString)
+
+    println("Number of measurements: " + cotraj
+      .map(_.measurements.length)
+      .reduce(_+_)
+      .toString)
+
+    /* Compute all possible swaps */
+    val partitioning = (60L, 0.001)
+    val swaps = cotraj
+      .map(_.partitionDistinct(partitioning))
+      .swaps(partitioning._1)
+      .cache
+
+    println("Total number of swaps: " + swaps.count.toString)
+
+    /* Compute the number of swaps per trajectory */
+    val numSwaps = swaps
+      .flatMap(_.ids)
+      .withColumnRenamed("value", "id")
+      .groupBy("id")
+      .count
+      .as[(Int, Long)]
+      .union(ids.map((_, 0)))
+      .groupBy("id")
+      .sum("count")
+      .select($"id", $"sum(count)".alias("swaps"))
+      .as[(Int, Long)]
+      .cache
+
+    println("Average number of swaps per trajectory "
+      + (numSwaps.map(_._2).reduce(_ + _)/ids.count).toString)
+
+    /* Trajectories with less than 20 swaps */
+    val numSwaps20 = numSwaps.filter(_._2 < 20).cache
+
+    println("Trajectories with less than 20 swaps: "
+      + numSwaps20.count.toString
+      + " (" + (100.0*numSwaps20.count/ids.count).toString + "%)")
+
+    /* Plot the distribution of swaps */
+    val dist20: Vector[(Long, Long)] = numSwaps20
+      .groupBy("swaps")
+      .count
+      .as[(Long, Long)]
+      .collect
+      .toVector
+
+    val chart20 = XYBarChart(dist20)
+
+    val chart20FileName = "swaps-distribution-20.pdf"
+
+    chart20.saveAsPDF(chart20FileName)
+    println("Saved distribution of swaps for trajectories participating in less than 20 swaps to "
+      + chart20FileName)
+
+    val numSwapsOther = numSwaps.filter(_._2 >= 20).cache
+
+    println("Trajectories with at least 20 swaps: "
+      + numSwapsOther.count.toString
+      + " (" + (100.0*numSwapsOther.count/ids.count).toString + "%)")
+
+    /* Plot the distribution of swaps */
+    val distOther: Vector[(Long, Long)] = numSwapsOther
+      .groupBy("swaps")
+      .count
+      .as[(Long, Long)]
+      .collect
+      .toVector
+
+    val chartOther = XYBarChart(distOther)
+
+    val chartOtherFileName = "swaps-distribution-other.pdf"
+
+    chartOther.saveAsPDF(chartOtherFileName)
+    println("Saved distribution of swaps for trajectories participating in at least 20 swaps to "
+      + chartOtherFileName)
+
+
+    /* Compute the DAG representation of SwapMob */
+    val graph = swaps
+      .graph(ids)
+      .partitionBy(PartitionStrategy.EdgePartition1D, 8)
+      .cache
+
+
+    /* Compute the total number of paths in the graph */
+    val startVertices: Array[Long] = graph
+      .vertices
+      .filter(_._2.time == Long.MinValue)
+      .map(_._1)
+      .collect
+
+    println("Number of start vertices: " + startVertices.length.toString)
+
+    val g = Swapmob.numPaths(graph, startVertices)
+
+    println("Computed graph with number of paths")
+
+    /*
+    println("Number of possible paths in the DAG: " + g
+      .vertices
+      .filter(_._2._1.time == Long.MaxValue)
+      .map(_._2._2.values.head)
+      .reduce(_+_)
+      .toString)
+     */
+
+    g
   }
 }

@@ -1,7 +1,9 @@
 import CoTrajectoryUtils._
 import Swapmob._
+import org.apache.spark.sql.Dataset
 import org.apache.spark.graphx._
 import scalax.chart.api._
+import java.io._
 
 object Examples {
   val spark = SparkSessionHolder.spark
@@ -34,30 +36,34 @@ object Examples {
 
     println("Number of possible swaps: " + swaps.count.toString)
 
-    /* Compute the DAG representation of SwapMob */
+    /* Compute the DAG representation of SwapMob. */
     val ids = cotraj.select($"id").as[Int].cache
     val graph = swaps
       .graph(ids)
-      .partitionBy(PartitionStrategy.EdgePartition1D, 8)
       .cache
 
-    /* Compute the total number of paths in the graph */
-    val startVertices: Array[Long] = ids.collect.map{i =>
-      graph
-        .vertices
-        .filter{case (vID, swap) =>
-          swap.time == Long.MinValue && swap.ids.contains(i)}
-        .first
-        ._1
-    }
-
-    val g = Swapmob.numPaths(graph, startVertices)
-
-    println("Number of possible paths in the DAG: " + g
+    /* Find the start and end vertices in the graph. */
+    val startVertices: Set[Long] = graph
       .vertices
-      .filter(_._2._1.time == Long.MaxValue)
-      .map(_._2._2.values.head)
-      .reduce(_+_)
+      .filter(_._2.time == Long.MinValue)
+      .map(_._1)
+      .collect
+      .toSet
+
+    val endVertices: Set[Long] = graph
+      .vertices
+      .filter(_._2.time == Long.MaxValue)
+      .map(_._1)
+      .collect
+      .toSet
+
+    /* Compute the total number of paths in the graph. */
+    val paths: Array[(Long, BigInt)] = Swapmob.numPathsArray(graph, startVertices)
+
+    println("Number of possible paths in the DAG: " + paths
+      .filter(v => endVertices.contains(v._1))
+      .map(_._2)
+      .sum
       .toString)
 
     /* Assuming we know that a trajectory had the following measurement.
@@ -66,18 +72,24 @@ object Examples {
      * it. */
     val m = Measurement(65L, Location(Array(2.5)))
 
-    // Find the id of the trajectory that m belongs to
+    /* Find the id of the trajectory that m belongs to. */
     val id = cotraj.filter(_.measurements.contains(m)).first.id
 
     println("m = " + m.toString)
 
-    // Find the vertex for the swaps occurring right before and after
-    // the measurement
+    /* Find the vertex for the swaps occurring right before and after
+     the measurement. */
     val vertexBefore: Long = graph
       .vertices
-      .filter(_._2.ids.contains(id))
-      .filter(_._2.time <= m.time)
+      .filter(v => v._2.time <= m.time && v._2.ids.contains(id))
       .sortBy(_._2.time, false)
+      .first
+      ._1
+
+    val vertexAfter: Long = graph
+      .vertices
+      .filter(v => v._2.time > m.time && v._2.ids.contains(id))
+      .sortBy(_._2.time)
       .first
       ._1
 
@@ -85,28 +97,71 @@ object Examples {
     val pathsBefore = g2
       .vertices
       .filter(_._2._1.time == Long.MinValue)
-      .map(_._2._2.values.headOption.getOrElse(0L))
+      .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
       .reduce(_+_)
 
     println("Number of possible paths before m: " + pathsBefore.toString)
 
-    val vertexAfter: Long = graph
-      .vertices
-      .filter(_._2.ids.contains(id))
-      .filter(_._2.time > m.time)
-      .sortBy(_._2.time)
-      .first
-      ._1
-
-    val g3 = Swapmob.numPaths(graph, Array(vertexAfter))
-    val pathsAfter = g3
-      .vertices
-      .filter(_._2._1.time == Long.MaxValue)
-      .map(_._2._2.values.headOption.getOrElse(0L))
-      .reduce(_+_)
+    val pathsAfter = Swapmob
+      .numPathsArray(graph, Set(vertexAfter))
+      .filter(v => endVertices.contains(v._1))
+      .map(_._2)
+      .sum
 
     println("Number of possible paths after m: " + pathsAfter.toString)
     println("Total number of paths passing through m: " + (pathsBefore*pathsAfter).toString)
+
+    /* Look at the family of predicates given by knowing exactly one
+     * measurement. This is the same as done above but done for all
+     * measurements. */
+
+    val measurements: Array[MeasurementID] = cotraj.measurements.collect
+
+    val pathsThroughMeasurements = measurements
+      .map{case MeasurementID(id, m) =>
+        val vertexBefore: Long = graph
+          .vertices
+          .filter(v => v._2.time <= m.time && v._2.ids.contains(id))
+          .sortBy(_._2.time, false)
+          .first
+          ._1
+
+        val vertexAfter: Long = graph
+          .vertices
+          .filter(v => v._2.time > m.time && v._2.ids.contains(id))
+          .sortBy(_._2.time)
+          .first
+          ._1
+
+        val g2 = Swapmob.numPaths(graph, Array(vertexBefore), true)
+        val pathsBefore = g2
+          .vertices
+          .filter(_._2._1.time == Long.MinValue)
+          .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
+          .reduce(_+_)
+
+        val g3 = Swapmob.numPaths(graph, Array(vertexAfter))
+        val pathsAfter = g3
+          .vertices
+          .filter(_._2._1.time == Long.MaxValue)
+          .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
+          .reduce(_+_)
+
+        println("m = " + m.toString + ": " + (pathsBefore*pathsAfter).toString)
+        pathsBefore*pathsAfter
+      }
+
+    val pathsDist = pathsThroughMeasurements
+      .groupBy(i => i)
+      .map(g => (g._1 , g._2.length))
+      .toVector
+
+    val pathsDistChar = XYBarChart(pathsDist)
+    val pathsDistCharFileName = "paths-dist.pdf"
+
+    pathsDistChar.saveAsPDF(pathsDistCharFileName)
+    println("Saved distribution of paths for knowing one measurement to "
+      + pathsDistCharFileName)
 
     /* Given that we know the first and last measurement of a trajectory,
      * give the number of possible paths between them. Do this for all
@@ -133,7 +188,7 @@ object Examples {
       println("i = " + id.toString + ": " + g4.
         vertices
         .filter(_._1 == endVertex)
-        .map(_._2._2.values.headOption.getOrElse(0L))
+        .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
         .reduce(_+_)
         .toString
       )
@@ -148,7 +203,7 @@ object Examples {
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
       Preprocess.dropShort(
         Preprocess.keepBox(
-          Parse.beijing(Parse.beijingFileSome),
+          Parse.beijing(Parse.beijingFile),
           Preprocess.boxBeijing),
         10))
       .cache
@@ -237,10 +292,9 @@ object Examples {
     /* Compute the DAG representation of SwapMob */
     val graph = swaps
       .graph(ids)
-      .partitionBy(PartitionStrategy.EdgePartition1D, 8)
       .cache
 
-
+    /*
     /* Compute the total number of paths in the graph */
     val startVertices: Array[Long] = graph
       .vertices
@@ -253,16 +307,68 @@ object Examples {
     val g = Swapmob.numPaths(graph, startVertices)
 
     println("Computed graph with number of paths")
-
-    /*
-    println("Number of possible paths in the DAG: " + g
-      .vertices
-      .filter(_._2._1.time == Long.MaxValue)
-      .map(_._2._2.values.head)
-      .reduce(_+_)
-      .toString)
      */
 
-    g
+    /* Randomly choose a trajectory and a measurement for that trajectory.
+     * Compute the number of paths in the graph that passes through
+     * this measurement. */
+    val rng = scala.util.Random
+    rng.setSeed(42)
+
+    val randTraj: Trajectory = cotraj.rdd.takeSample(false, 1, 42).head
+    val m: Measurement = randTraj
+      .measurements(rng.nextInt(randTraj.measurements.length))
+
+    /* Find the vertices in the graph occurring right before and after
+     * m */
+    val vertexBefore: Long = graph
+      .vertices
+      .filter(v => v._2.ids.contains(randTraj.id) && v._2.time <= m.time)
+      .sortBy(_._2.time, false)
+      .first
+      ._1
+
+    val vertexAfter: Long = graph
+      .vertices
+      .filter(v => v._2.ids.contains(randTraj.id) && v._2.time > m.time)
+      .sortBy(_._2.time)
+      .first
+      ._1
+
+    println("m = " + m.toString)
+
+    val g2 = Swapmob.numPaths(graph, Array(vertexBefore), true)
+    val pathsBefore = g2
+      .vertices
+      .filter(_._2._1.time == Long.MinValue)
+      .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
+      .reduce(_+_)
+
+    println("Number of possible paths before m: " + pathsBefore.toString)
+
+
+    g2
+  }
+
+  /* Generates data for visualizing some trajectories from taxis in
+   * Beijing. */
+  def figure1(n: Int = 10, seed: Int = 0) = {
+    val cotraj = CoTrajectoryUtils.getCoTrajectory(
+      Preprocess.dropShort(
+        Preprocess.keepBox(
+          Parse.sanFransisco(Parse.sanFransiscoFile),
+          Preprocess.boxSanFransisco),
+        10))
+
+    val sample: Array[Trajectory] = cotraj.rdd.takeSample(false, n, seed)
+
+    val html: String = Visualize.genLeafletHTML(sample.map(_.toJson))
+
+    val fileName: String = "co-trajectory-example.html"
+
+    val pw = new PrintWriter(new File(fileName))
+    pw.write(html)
+    pw.close
+
   }
 }

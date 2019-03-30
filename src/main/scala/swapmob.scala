@@ -179,11 +179,36 @@ object Swapmob {
     resultGraph
   }
 
-  def numPathsArray(graph: Graph[Swap, Int], startVertices: Set[Long],
-    verbose: Boolean = false): Array[(Long, BigInt)] = {
+  def numPathsArray(g: Graph[Swap, Int], startVertices: Set[Long],
+    reverse: Boolean = false, verbose: Boolean = false):
+      Array[(Long, BigInt)] = {
 
-    /* We map the vertex IDs to a linear id 0, 1, ..., N. Also create a
-     * reverse map. */
+    /* If reverse is true we instead of the original graph consider the
+     * reversed graph. */
+    val graph: Graph[Swap, Int] = if(reverse){
+      g.reverse
+    }else{
+      g
+    }.cache
+
+    /* Normally the root vertices have time equal to Long.MinValue and the
+     * final vertices time equal to Long.MaxValue. If the graph is
+     * reversed this is also reversed. */
+    val startTime: Long = if(reverse){
+      Long.MaxValue
+    }else{
+      Long.MinValue
+    }
+
+    val endTime: Long = if(reverse){
+      Long.MinValue
+    }else{
+      Long.MaxValue
+    }
+
+    /* We map the vertex IDs to a linear id 0, 1, ..., N. Create both the
+     * mapping from vertex IDs to the linear ID as well as the reverse
+     * map. */
     val m = graph
       .vertices
       .map(_._1)
@@ -193,10 +218,10 @@ object Swapmob {
 
     val mReversed = for ((k, v) <- m) yield (v, k)
 
-    /* An array containing the children of all vertices. Some vertices have
-     * several edges to one of their childs and to represent this the
-     * children are represented by their ID together with an indexing
-     * representing the edge. */
+    /* Compute an array containing the children of all vertices. Some
+     * vertices have several edges to one of their childs and to
+     * represent this the children are represented by their ID
+     * together with an indexing representing the edge. */
     val childrenDataset: Dataset[(Long, Array[Long])] = graph
       .triplets
       .toDS
@@ -207,7 +232,7 @@ object Swapmob {
       .union(graph
         .vertices
         .toDS
-        .filter(_._2.time == Long.MaxValue)
+        .filter(_._2.time == endTime)
         .map(x => (x._1, Array(): Array[Long])))
 
     val children: Array[Array[(Int, Int)]] = childrenDataset
@@ -237,7 +262,7 @@ object Swapmob {
     /* Set up an array containing the information about the number of
      * paths to each vertex. This is represented by a map containging
      * the number of paths from each of its ingoing edges. This is
-     * filled with data in the loop below. Vertices at which a path
+     * populated with data in the loop below. Vertices at which a path
      * can start are represented by mapping the artificial vertex
      * (-1, -1) to 1, for vertices where a path cannot start it is
      * mapped to zero. */
@@ -256,7 +281,7 @@ object Swapmob {
     var activeVertices: collection.mutable.Set[Int] =
       collection.mutable.Set() ++ graph
         .vertices
-        .filter(_._2.time == Long.MinValue)
+        .filter(_._2.time == startTime)
         .map(_._1)
         .collect
         .map(m(_))

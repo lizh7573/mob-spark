@@ -93,16 +93,15 @@ object Examples {
       .first
       ._1
 
-    val g2 = Swapmob.numPaths(graph, Array(vertexBefore), true)
-    val pathsBefore = g2
-      .vertices
-      .filter(_._2._1.time == Long.MinValue)
-      .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
-      .reduce(_+_)
+    val pathsBefore: BigInt = Swapmob
+      .numPathsArray(graph, Set(vertexBefore), true)
+      .filter(v => startVertices.contains(v._1))
+      .map(_._2)
+      .sum
 
     println("Number of possible paths before m: " + pathsBefore.toString)
 
-    val pathsAfter = Swapmob
+    val pathsAfter: BigInt = Swapmob
       .numPathsArray(graph, Set(vertexAfter))
       .filter(v => endVertices.contains(v._1))
       .map(_._2)
@@ -133,35 +132,33 @@ object Examples {
           .first
           ._1
 
-        val g2 = Swapmob.numPaths(graph, Array(vertexBefore), true)
-        val pathsBefore = g2
-          .vertices
-          .filter(_._2._1.time == Long.MinValue)
-          .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
-          .reduce(_+_)
+        val pathsBefore: BigInt = Swapmob
+          .numPathsArray(graph, Set(vertexBefore), true)
+          .filter(v => startVertices.contains(v._1))
+          .map(_._2)
+          .sum
 
-        val g3 = Swapmob.numPaths(graph, Array(vertexAfter))
-        val pathsAfter = g3
-          .vertices
-          .filter(_._2._1.time == Long.MaxValue)
-          .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
-          .reduce(_+_)
+        val pathsAfter: BigInt = Swapmob
+          .numPathsArray(graph, Set(vertexAfter))
+          .filter(v => endVertices.contains(v._1))
+          .map(_._2)
+          .sum
 
         println("m = " + m.toString + ": " + (pathsBefore*pathsAfter).toString)
         pathsBefore*pathsAfter
       }
 
-    val pathsDist = pathsThroughMeasurements
+    val pathsDistribution = pathsThroughMeasurements
       .groupBy(i => i)
       .map(g => (g._1 , g._2.length))
       .toVector
 
-    val pathsDistChar = XYBarChart(pathsDist)
-    val pathsDistCharFileName = "paths-dist.pdf"
+    val pathsDistributionChar = XYBarChart(pathsDistribution)
+    val pathsDistributionCharFileName = "paths-dist.pdf"
 
-    pathsDistChar.saveAsPDF(pathsDistCharFileName)
+    pathsDistributionChar.saveAsPDF(pathsDistributionCharFileName)
     println("Saved distribution of paths for knowing one measurement to "
-      + pathsDistCharFileName)
+      + pathsDistributionCharFileName)
 
     /* Given that we know the first and last measurement of a trajectory,
      * give the number of possible paths between them. Do this for all
@@ -169,29 +166,25 @@ object Examples {
     println("Number of paths starting and ending at the same vertices as trajectory i:")
 
     ids.collect.sorted.foreach{ id =>
-      val startVertex: Long = graph.
-        vertices
-        .filter(_._2.time == Long.MinValue)
-        .filter(_._2.ids.contains(id))
+      val startVertex: Long = graph
+        .vertices
+        .filter(v => v._2.time == Long.MinValue && v._2.ids.contains(id))
         .first
         ._1
 
-      val endVertex: Long = graph.
-        vertices
-        .filter(_._2.time == Long.MaxValue)
-        .filter(_._2.ids.contains(id))
+      val endVertex: Long = graph
+        .vertices
+        .filter(v => v._2.time == Long.MaxValue && v._2.ids.contains(id))
         .first
         ._1
 
-      val g4 = Swapmob.numPaths(graph, Array(startVertex))
-
-      println("i = " + id.toString + ": " + g4.
-        vertices
+      val paths = Swapmob
+        .numPathsArray(graph, Set(startVertex))
         .filter(_._1 == endVertex)
-        .map(_._2._2.values.headOption.getOrElse(BigInt(0)))
-        .reduce(_+_)
-        .toString
-      )
+        .map(_._2)
+        .sum
+
+      println("i = " + id.toString + ": " + paths.toString)
     }
   }
 

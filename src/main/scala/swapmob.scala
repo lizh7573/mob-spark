@@ -54,210 +54,24 @@ object Swapmob {
     }
   }
 
-  /* Returns a graph holding data about the number of possible paths.
-   * The input consists of the graph to consider together with a list
-   * of vertices that are possible starting vertices for the paths.
-   * The returned graph holds the same data as the original graph
-   * together with information about how many paths starting from any
-   * of the starting vertices and ending at the current vertex there
-   * are. If reverse is set to true the paths are considered in the
-   * opposite direction. The argument maxIter is used to set the
-   * maximum number of iteration in the Pregel program used for the
-   * computations. */
-  def numPaths(graph: Graph[Swap, Int],
-    startVertices: Array[Long],
-    reverse: Boolean = false,
-    maxIter: Int = Int.MaxValue):
-      Graph[(Swap, Map[(Long, Int), scala.math.BigInt]), Int] = {
-
-    /* The number of paths to a vertex is represented by a map which maps
-     * incoming edges (represented by the vertex Id for other end of
-     * the edge and the edge's id) to number of paths coming from that
-     * edge. */
-
-    /* Initialize all vertices with the empty map, except the starting
-     * verices for which it maps an artifical edge to 1. */
-    /* TODO: Optimize this by doing storing startVertices in an RDD and
-     * doing a join. */
-    val g: Graph[(Swap, Map[(Long, Int), scala.math.BigInt]), Int] =
-      graph.mapVertices{case (vId, swap) =>
-        (swap,
-          if (startVertices.contains(vId))
-            Map((vId, -1) -> BigInt(1)).withDefaultValue(BigInt(0))
-          else
-            Map().withDefaultValue(0L)
-        )
-      }
-
-    val g2: Graph[(Swap, Map[(Long, Int), scala.math.BigInt]), Int] =
-      g.pregel(Map(): Map[(Long, Int), scala.math.BigInt], maxIter)(
-        // Update vertices by updating the map with the new
-        // information.
-        (id, value, message) => (value._1, value._2 ++ message),
-        // Send the number of paths to this vertex to neighbours which
-        // do not have the updated information. If reverese is set to
-        // true it sends the information backwards in the graph.
-        triplet => {
-          if (!reverse) {
-            if (triplet.srcAttr._2.values.sum
-              > triplet.dstAttr._2((triplet.srcId, triplet.attr)))
-              Iterator((triplet.dstId,
-                Map((triplet.srcId, triplet.attr) -> triplet.srcAttr._2.values.sum)))
-            else
-              Iterator.empty
-          } else {
-            if (triplet.dstAttr._2.values.sum
-              > triplet.srcAttr._2((triplet.dstId, triplet.attr)))
-              Iterator((triplet.srcId,
-                Map((triplet.dstId, triplet.attr) -> triplet.dstAttr._2.values.sum)))
-            else
-              Iterator.empty
-          }
-
-        },
-        _ ++ _
-      )
-
-    g2
-  }
-
-  /* Returns a graph holding data about the total number of possible
-   * paths. This works similarly to numPaths above but for computing
-   * the total number of paths in the graph. It is equivalent to
-   * numPaths called with all starting vertices of the graph but
-   * better optimized for that. */
-  def numPathsTotal(graph: Graph[Swap, Int],
-    maxIter: Int = Int.MaxValue):
-      Graph[(Int, BigInt), Int] = {
-
-    /* Vertices have are given by (status: Int, paths: BigInt), paths is
-     * the number of paths to this vertex and the status of the vertex
-     * is given by:
-     * -n: Waiting for n parents
-     * 0: Ready
-     * 1: Done */
-
-    val inDegrees: VertexRDD[Int] = graph.inDegrees
-
-    val startGraph: Graph[(Int, BigInt), Int] = graph
-      .outerJoinVertices(inDegrees){(vId, swap, inDegOpt) =>
-        val state = inDegOpt match {
-          case Some(inDeg) => -inDeg
-          case None => 0
-        }
-
-        val paths = if (swap.time == Long.MinValue)
-          BigInt(1)
-        else
-          BigInt(0)
-
-        (state, paths)
-      }.cache
-
-    startGraph.vertices.count
-    startGraph.edges.count
-
-    println("Created start graph")
-
-    val resultGraph: Graph[(Int, BigInt), Int] = startGraph
-      .pregel((0, BigInt(0)), maxIter)(
-        // Update vertices by updating the map with the new
-        // information.
-        (id, value, message) => (value._1 + message._1, value._2 + message._2),
-        // If this vertex is ready (status == 0) then send the number
-        // of paths to this vertex and set the status to done to not
-        // send again.
-        triplet => {
-          if (triplet.srcAttr._1 == 0)
-            Iterator((triplet.dstId, (1, triplet.srcAttr._2)))
-          else
-            Iterator.empty
-        },
-        (m1, m2) => (m1._1 + m2._1, m1._2 + m2._2)
-      )
-
-    resultGraph
-  }
-
-  def numPathsArray(g: Graph[Swap, Int], startVertices: Set[Long],
+  def numPaths(graph: Graph[Swap, Int], startVertices: Set[Long],
     reverse: Boolean = false, verbose: Boolean = false):
-      Array[(Long, BigInt)] = {
-
-    /* If reverse is true we instead of the original graph consider the
-     * reversed graph. */
-    val graph: Graph[Swap, Int] = if(reverse){
-      g.reverse
-    }else{
-      g
-    }.cache
-
-    /* Normally the root vertices have time equal to Long.MinValue and the
-     * final vertices time equal to Long.MaxValue. If the graph is
-     * reversed this is also reversed. */
-    val startTime: Long = if(reverse){
-      Long.MaxValue
-    }else{
-      Long.MinValue
-    }
-
-    val endTime: Long = if(reverse){
-      Long.MinValue
-    }else{
-      Long.MaxValue
-    }
-
-    /* We map the vertex IDs to a linear id 0, 1, ..., N. Create both the
-     * mapping from vertex IDs to the linear ID as well as the reverse
-     * map. */
-    val m = graph
+      Map[Long, BigInt] = {
+    /* We map the vertices to a linear index starting from 0. */
+    val indices: Map[Long, Int] = graph
       .vertices
       .map(_._1)
       .zipWithIndex
-      .collectAsMap
+      .collect
+      .toMap
       .mapValues(_.toInt)
 
-    val mReversed = for ((k, v) <- m) yield (v, k)
+    val indicesInverse: Map[Int, Long] = for ((v, i) <- indices) yield (i, v)
 
-    /* Compute an array containing the children of all vertices. Some
-     * vertices have several edges to one of their childs and to
-     * represent this the children are represented by their ID
-     * together with an indexing representing the edge. */
-    val childrenDataset: Dataset[(Long, Array[Long])] = graph
-      .triplets
-      .toDS
-      .map(triplet => (triplet.srcId, triplet.dstId))
-      .groupBy($"_1".alias("vertex"))
-      .agg(collect_list("_2").alias("children"))
-      .as[(Long, Array[Long])]
-      .union(graph
-        .vertices
-        .toDS
-        .filter(_._2.time == endTime)
-        .map(x => (x._1, Array(): Array[Long])))
-
-    val children: Array[Array[(Int, Int)]] = childrenDataset
-      .collect
-      .map{case (vertex, children) => (m(vertex), children.map(m(_)))}
-      .sortBy(_._1)
-      .map(_._2
-        .groupBy(c => c)
-        .values
-        .toArray
-        .map(_.zipWithIndex)
-        .flatten)
-
-    /* Compute an array containing the in degrees of all vertices. */
-    val inDegreesMap: Map[Int, Int] = graph
-      .inDegrees
-      .collect
-      .map{case (vertex, degree) => (m(vertex), degree)}
-      .toMap
-      .withDefaultValue(0)
-
-    val inDegrees: Array[Int] = children
-      .indices
-      .toArray
-      .map(inDegreesMap(_))
+    /* Compute maps for the children and the in degrees of all
+     * vertices. */
+    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, reverse)
 
     /* Set up an array containing the information about the number of
      * paths to each vertex. This is represented by a map containging
@@ -267,26 +81,94 @@ object Swapmob {
      * (-1, -1) to 1, for vertices where a path cannot start it is
      * mapped to zero. */
     val paths: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-      children
-        .indices
-        .toArray
-        .map(v =>
-          if (startVertices.contains(mReversed(v)))
+      (0 to indices.size - 1)
+        .map{i =>
+          if (startVertices.contains(indicesInverse(i)))
             collection.mutable.Map((-1, -1) -> BigInt(1))
           else
-            collection.mutable.Map((-1, -1) -> BigInt(0)))
+            collection.mutable.Map((-1, -1) -> BigInt(0))
+        }
+        .toArray
 
     /* Set the active vertices to the root vertices for the graph, those
      * with no in going edges. */
-    var activeVertices: collection.mutable.Set[Int] =
-      collection.mutable.Set() ++ graph
+    var activeVertices: Set[Int] =
+      graph
         .vertices
-        .filter(_._2.time == startTime)
         .map(_._1)
         .collect
-        .map(m(_))
+        .map(v => indices(v))
+        .filter(inDegrees(_) == 0)
         .toSet
 
+    val res = numPathsIteration(children, inDegrees, paths, activeVertices, verbose)
+
+    (0 to indices.size - 1)
+      .map(i => (indicesInverse(i), res(i)))
+      .toMap
+  }
+
+  /* Compute the data in numPaths that only depend on the graph and not
+   * on the start vertices. */
+  def numPathsPreCompute(g: Graph[Swap, Int], indices: Map[Long, Int],
+    reverse: Boolean = false):
+      (Array[Array[(Int, Int)]], Array[Int]) = {
+    /* If reverse is true we instead of the original graph consider the
+     * reversed graph. */
+    val graph: Graph[Swap, Int] = if(reverse){
+      g.reverse
+    }else{
+      g
+    }.cache
+
+    val indicesInverse: Map[Int, Long] = for ((v, i) <- indices) yield (i, v)
+
+    /* Compute an array containing the children of all vertices. Some
+     * vertices have several edges to one of their childs and to
+     * represent this the children are represented by their ID
+     * together with an indexing representing the edge. */
+    val childrenMap: Map[Long, Array[(Long, Int)]] = graph
+      .triplets
+      .toDS
+      .map(triplet => (triplet.srcId, triplet.dstId))
+      .groupBy($"_1".alias("vertex"))
+      .agg(collect_list("_2").alias("children"))
+      .as[(Long, Array[Long])]
+      .collect
+      .toMap
+      .mapValues(_
+        .groupBy(c => c)
+        .values
+        .toArray
+        .map(_.zipWithIndex)
+        .flatten)
+      .withDefaultValue(Array())
+
+    val children: Array[Array[(Int, Int)]] = (0 to indicesInverse.size - 1)
+      .map(i => childrenMap(indicesInverse(i)).map(x => (indices(x._1), x._2)))
+      .toArray
+
+    /* Compute a map containing the in degrees of all vertices. */
+    val inDegreesMap: Map[Long, Int] = graph
+      .inDegrees
+      .collect
+      .toMap
+      .withDefaultValue(0)
+
+    val inDegrees: Array[Int] = (0 to indicesInverse.size - 1)
+      .map(i => inDegreesMap(indicesInverse(i)))
+      .toArray
+
+    (children, inDegrees)
+  }
+
+  def numPathsIteration(children: Array[Array[(Int, Int)]],
+    inDegrees: Array[Int],
+    paths: Array[collection.mutable.Map[(Int, Int), BigInt]],
+    activeVerticesStart: Set[Int],
+    verbose: Boolean = false):
+      Array[BigInt] = {
+    var activeVertices = collection.mutable.Set() ++ activeVerticesStart
     var i = 0
 
     while(!activeVertices.isEmpty){
@@ -316,8 +198,6 @@ object Swapmob {
       activeVertices = newVertices
     }
 
-    paths.zipWithIndex.map{case (paths, v) =>
-      (mReversed(v), paths.values.sum)
-    }
+    paths.map(_.values.sum)
   }
 }

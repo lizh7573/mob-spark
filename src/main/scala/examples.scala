@@ -15,32 +15,39 @@ object Examples {
    * basic stats. Finally it computes the DAG representation of
    * SwapMob and gives some more involed data about this. */
   def example1() = {
-    /* Parse the co-trajectory and give basic stats */
-    val cotraj = Parse
+    /* Open file for normal output */
+    val output = new PrintWriter(new File("output/example1.txt"))
+
+    /* Parse the co-trajectory */
+    val cotraj: Dataset[Trajectory] = Parse
       .testCoTrajectory("data/examples/cotraj-graph-swap-big-example.txt")
       .cache
 
-    println("Number of trajectories: " + cotraj.count.toString)
+    /* Compute number of trajectories and number of measurements */
+    val numTrajectories: Long = cotraj.count
+    val numMeasurements: Long = cotraj.map(_.measurements.length).reduce(_ + _)
 
-    println("Number of measurements: " + cotraj
-      .map(_.measurements.length)
-      .reduce(_+_)
-      .toString)
+    output.println("Number of trajectories: " + numTrajectories.toString)
+    println("Number of trajectories: " + numTrajectories.toString)
 
-    /* Compute all possible swaps */
-    val partitioning = (10L, 1.0/3)
-    val swaps = cotraj
+    output.println("Number of measurements: " + numMeasurements.toString)
+    println("Number of measurements: " + numMeasurements.toString)
+
+    /* Compute possible swaps */
+    val partitioning: (Long, Double) = (10L, 1.0/3)
+    val swaps: Dataset[Swap] = cotraj
       .map(_.partitionDistinct(partitioning))
       .swaps(partitioning._1)
       .cache
 
-    println("Number of possible swaps: " + swaps.count.toString)
+    val numSwaps: Long = swaps.count
 
-    /* Compute the DAG representation of SwapMob. */
-    val ids = cotraj.select($"id").as[Int].cache
-    val graph = swaps
-      .graph(ids)
-      .cache
+    output.println("Number of possible swaps: " + numSwaps.toString)
+    println("Number of possible swaps: " + numSwaps.toString)
+
+    /* Compute the DAG representation of SwapMob */
+    val ids: Dataset[Int] = cotraj.select($"id").as[Int].cache
+    val graph: Graph[Swap, Int] = swaps.graph(ids).cache
 
     /* We want to compute the number of paths in the graph for several
      * different start vertices. It is then much more efficient to
@@ -48,7 +55,7 @@ object Examples {
      * of calling numPaths several time. We precompute the data
      * here. We do it for both the graph and the reversed graph. */
 
-    /* We map the vertices to a linear index starting from 0. */
+    /* Map the vertices to a linear index starting from 0 */
     val indices: Map[Long, Int] = graph
       .vertices
       .map(_._1)
@@ -59,7 +66,7 @@ object Examples {
 
     val indicesInverse: Map[Int, Long] = for ((v, i) <- indices) yield (i, v)
 
-    /* Find the start and end vertices in the graph. */
+    /* Find start and end vertices in the graph */
     val startVertices: Set[Long] = graph
       .vertices
       .filter(_._2.time == Long.MinValue)
@@ -78,14 +85,14 @@ object Examples {
 
     val endVerticesLinear: Set[Int] = endVertices.map(indices(_))
 
-    val (children, inDegrees) = numPathsPreCompute(graph, indices, false)
-    val (childrenReverse, inDegreesReverse) = numPathsPreCompute(graph, indices, true)
+    /* Precompute data for computing number of paths */
+    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, false)
+    val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, true)
 
-    ////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////
-    /* Compute the total number of paths in the graph. */
-    val pathsCount: BigInt = {
+    /* Compute total number of paths in the graph */
+    val numPathsTotal: BigInt = {
       val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
       (0 to indices.size - 1)
         .map{i =>
@@ -96,33 +103,32 @@ object Examples {
         }
         .toArray
 
-      val paths: Array[BigInt] = Swapmob.numPathsIteration(children,
+      val numPaths: Array[BigInt] = Swapmob.numPathsIteration(children,
         inDegrees, pathsInit, startVerticesLinear)
 
       endVerticesLinear
         .toIterator
-        .map(i => paths(i))
+        .map(numPaths(_))
         .sum
     }
 
-    println("Number of possible paths in the DAG: " + pathsCount.toString)
+    output.println("Number of possible paths in the DAG: " + numPathsTotal.toString)
+    println("Number of possible paths in the DAG: " + numPathsTotal.toString)
 
-    ////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////
     /* Assuming we know that a trajectory had the following measurement.
      * Give the number of paths passing through that measurement,
      * given by the product of paths goint from it and paths going to
      * it. */
-    val m = Measurement(65L, Location(Array(2.5)))
+    val m: Measurement = Measurement(65L, Location(Array(2.5)))
 
-    /* Find the id of the trajectory that m belongs to. */
-    val id = cotraj.filter(_.measurements.contains(m)).first.id
-
+    output.println("m = " + m.toString)
     println("m = " + m.toString)
 
+    /* Find the id of the trajectory that m belongs to. */
+    val id: Long = cotraj.filter(_.measurements.contains(m)).first.id
+
     /* Find the number of paths before m. */
-    val pathsBeforeCount: BigInt = {
+    val numPathsBeforeM: BigInt = {
       val vertexBefore: Long = graph
         .vertices
         .filter(v => v._2.time <= m.time && v._2.ids.contains(id))
@@ -140,19 +146,20 @@ object Examples {
           }
           .toArray
 
-      val paths: Array[BigInt] = numPathsIteration(childrenReverse,
+      val numPaths: Array[BigInt] = numPathsIteration(childrenReverse,
         inDegreesReverse, pathsInit, endVerticesLinear)
 
       startVerticesLinear
         .toIterator
-        .map(i => paths(i))
+        .map(numPaths(_))
         .sum
     }
 
-    println("Number of possible paths before m: " + pathsBeforeCount.toString)
+    output.println("Number of possible paths before m: " + numPathsBeforeM.toString)
+    println("Number of possible paths before m: " + numPathsBeforeM.toString)
 
     /* Find the number of paths after m. */
-    val pathsAfterCount: BigInt = {
+    val numPathsAfterM: BigInt = {
       val vertexAfter: Long = graph
         .vertices
         .filter(v => v._2.time > m.time && v._2.ids.contains(id))
@@ -170,30 +177,45 @@ object Examples {
           }
           .toArray
 
-      val paths: Array[BigInt] = numPathsIteration(children,
+      val numPaths: Array[BigInt] = numPathsIteration(children,
         inDegrees, pathsInit, startVerticesLinear)
 
       endVerticesLinear
         .toIterator
-        .map(i => paths(i))
+        .map(numPaths(_))
         .sum
     }
 
-    println("Number of possible paths after m: " + pathsAfterCount.toString)
-    println("Total number of paths passing through m: "
-      + (pathsBeforeCount*pathsAfterCount).toString)
+    output.println("Number of possible paths after m: " + numPathsAfterM.toString)
+    println("Number of possible paths after m: " + numPathsAfterM.toString)
+
+    val numPathsM: BigInt = numPathsBeforeM*numPathsAfterM
+
+    output.println("Total number of paths passing through m: " + numPathsM.toString)
+    println("Total number of paths passing through m: " + numPathsM.toString)
 
     /* Look at the family of predicates given by knowing exactly one
      * measurement. This is the same as done above but done for all
      * measurements. */
-
     val measurements: Array[MeasurementID] = cotraj.measurements.collect
 
-    val pathsThroughMeasurements = measurements
+    /* Write data to csv file */
+    val outputNumPathsMeasurementsName: String = "output/example1-1.csv"
+    val outputNumPathsMeasurements =
+      new PrintWriter(new File(outputNumPathsMeasurementsName))
+
+    output.println("Output data about number of paths through measurements to " +
+      outputNumPathsMeasurementsName)
+    println("Output data about number of paths through measurements to " +
+      outputNumPathsMeasurementsName)
+
+    outputNumPathsMeasurements.println("numPaths")
+
+    val numPathsMeasurements: Array[BigInt] = measurements
       .map{case MeasurementID(id, m) =>
 
-        /* Find the number of paths before m. */
-        val pathsBeforeCount: BigInt = {
+        /* Find number of paths before */
+        val numPathsBefore: BigInt = {
           val vertexBefore: Long = graph
             .vertices
             .filter(v => v._2.time <= m.time && v._2.ids.contains(id))
@@ -211,17 +233,17 @@ object Examples {
               }
               .toArray
 
-          val paths: Array[BigInt] = numPathsIteration(childrenReverse,
+          val numPaths: Array[BigInt] = numPathsIteration(childrenReverse,
             inDegreesReverse, pathsInit, endVerticesLinear)
 
           startVerticesLinear
             .toIterator
-            .map(i => paths(i))
+            .map(numPaths(_))
             .sum
         }
 
-        /* Find the number of paths after m. */
-        val pathsAfterCount: BigInt = {
+        /* Find number of paths after */
+        val numPathsAfter: BigInt = {
           val vertexAfter: Long = graph
             .vertices
             .filter(v => v._2.time > m.time && v._2.ids.contains(id))
@@ -239,35 +261,40 @@ object Examples {
               }
               .toArray
 
-          val paths: Array[BigInt] = numPathsIteration(children,
+          val numPaths: Array[BigInt] = numPathsIteration(children,
             inDegrees, pathsInit, startVerticesLinear)
 
           endVerticesLinear
             .toIterator
-            .map(i => paths(i))
+            .map(numPaths(_))
             .sum
         }
 
-        println("m = " + m.toString + ": " + (pathsBeforeCount*pathsAfterCount).toString)
-        pathsBeforeCount*pathsAfterCount
+        val numPaths: BigInt = numPathsBefore*numPathsAfter
+
+        output.println("m = " + m.toString + ": " + numPaths.toString)
+        println("m = " + m.toString + ": " + numPaths.toString)
+
+        outputNumPathsMeasurements.println(numPaths.toString)
+
+        numPaths
       }
 
-    val pathsDistribution = pathsThroughMeasurements
-      .groupBy(i => i)
-      .map(g => (g._1 , g._2.length))
-      .toVector
-
-    val pathsDistributionChar = XYBarChart(pathsDistribution)
-    val pathsDistributionCharFileName = "paths-dist.pdf"
-
-    pathsDistributionChar.saveAsPDF(pathsDistributionCharFileName)
-    println("Saved distribution of paths for knowing one measurement to "
-      + pathsDistributionCharFileName)
+    outputNumPathsMeasurements.close()
 
     /* Given that we know the first and last measurement of a trajectory,
      * give the number of possible paths between them. Do this for all
      * original trajectories. */
-    println("Number of paths starting and ending at the same vertices as trajectory i:")
+    val outputNumPathsStartEndName: String = "output/example1-2.csv"
+    val outputNumPathsStartEnd =
+      new PrintWriter(new File(outputNumPathsStartEndName))
+
+    output.println("Output data about number of paths starting and ending at a" +
+      " the same vertices as trajectory i to " + outputNumPathsStartEndName)
+    println("Output data about number of paths starting and ending at a" +
+      " the same vertices as trajectory i to " + outputNumPathsStartEndName)
+
+    outputNumPathsStartEnd.println("id,numPaths")
 
     ids.collect.sorted.foreach{id =>
       val startVertex: Long = graph
@@ -292,11 +319,19 @@ object Examples {
           }
           .toArray
 
-      val paths: Array[BigInt] = numPathsIteration(children,
+      val numPaths: Array[BigInt] = numPathsIteration(children,
         inDegrees, pathsInit, startVerticesLinear)
 
-      println("i = " + id.toString + ": " + paths(indices(endVertex)))
+      output.println("i = " + id.toString + ": " + numPaths(indices(endVertex)))
+      println("i = " + id.toString + ": " + numPaths(indices(endVertex)))
+
+      outputNumPathsStartEnd.println(id.toString + "," +
+        numPaths(indices(endVertex)).toString)
     }
+
+    outputNumPathsStartEnd.close()
+
+    output.close()
   }
 
   /* An example with the co-trajectory from the T-drive dataset. It

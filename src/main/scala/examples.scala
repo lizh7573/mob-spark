@@ -19,7 +19,7 @@ object Examples {
 
     /* Parse the co-trajectory */
     val cotraj: Dataset[Trajectory] = Parse
-      .testCoTrajectory("data/examples/cotraj-graph-swap-big-example.txt")
+      .testCoTrajectory("data/examples/cotrajectory_example.csv")
       .cache
 
     /* Compute number of trajectories and number of measurements */
@@ -33,7 +33,7 @@ object Examples {
     println("Number of measurements: " + numMeasurements.toString)
 
     /* Compute possible swaps */
-    val partitioning: (Long, Double) = (10L, 1.0/3)
+    val partitioning: (Long, Double) = (2L, 1.0)
     val swaps: Dataset[Swap] = cotraj
       .map(_.partitionDistinct(partitioning))
       .swaps(partitioning._1)
@@ -118,7 +118,7 @@ object Examples {
      * Give the number of paths passing through that measurement,
      * given by the product of paths goint from it and paths going to
      * it. */
-    val m: Measurement = Measurement(65L, Location(Array(2.5)))
+    val m: Measurement = Measurement(13L, Location(Array(2.5)))
 
     output.println("m = " + m.toString)
     println("m = " + m.toString)

@@ -476,10 +476,14 @@ object Examples {
 
   /* Compute the number of paths going through all of the different
    * measurements. This corresponds to the first family of predicates
-   * in the thesis. */
-  def example2NumPathsMeasurements(): Map[MeasurementID, BigInt] = {
+   * in the thesis. The fraction parameter indicates the fraction of
+   * measurements that should be sampled. */
+  def example2NumPathsMeasurements(fraction: Double = 0.05):
+      Map[MeasurementID, BigInt] = {
     /* Open file for normal output */
-    val output = new PrintWriter(new File("output/example2NumPathsMeasurements.csv"))
+    val filename = "output/example2NumPathsMeasurements.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Output data to " + filename)
 
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -609,6 +613,7 @@ object Examples {
 
     val numPathsMeasurements: Map[MeasurementID, BigInt] = cotraj
       .measurements
+      .sample(false, fraction)
       .collect
       .map{m =>
         val (vertexBeforeLinear: Int, vertexAfterLinear: Int) = {
@@ -637,7 +642,9 @@ object Examples {
    * predicates in the thesis. */
   def example2NumPathsStartEnd() = {
     /* Open file for normal output */
-    val output = new PrintWriter(new File("output/example2NumPathsStartEnd.csv"))
+    val filename = "output/example2NumPathsStartEnd.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Output data to " + filename)
 
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -756,12 +763,15 @@ object Examples {
   }
 
   /* Given that we know the N measurements of a trajectory, give the
-   * number of possible paths going through all of them. Do this for a
-   * sample of trajectories and measurements. This corresponds to the
-   * third family of predicates in the thesis. */
-  def example2NumPathsNMeasurements(N: Int = 4, sampleSize: Int = 1000) = {
+   * number of possible paths going through all of them. This
+   * corresponds to the third family of predicates in the thesis. The
+   * sample size determines the number of samples to consider, this is
+   * not an exact number but an approximate one. */
+  def example2NumPathsNMeasurements(N: Int = 4, sampleSize: Int = 20000) = {
     /* Open file for normal output */
-    val output = new PrintWriter(new File("output/example2NumPathsMeasurements.csv"))
+    val filename = "output/example2NumPathsNMeasurements.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Output data to " + filename)
 
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -873,7 +883,6 @@ object Examples {
       .map{id =>
 
         if (i % 100 == 0){println(i)}
-
         i = i + 1
 
         (id, graph
@@ -889,14 +898,100 @@ object Examples {
 
     /* Sample the data, sample trajectories with replacement and for
      * each trajectory sample measurements without replacement. */
-    val sample: Array[Array[MeasurementID]] = Array()
+    val sampleTrajectories: java.util.Iterator[Trajectory] = cotraj
+      .sample(true, sampleSize/cotraj.count)
+      .toLocalIterator
 
-    /* For every sample compute the number of paths
+    /* For every sample trajectory find N random measurements and compute
+     * the number of paths
 
      - Find the vertices before and after the measurements
      - Compute the number of paths before the first vertex
      - Compute the number of paths between the vertices
      - Compute the number of paths after the last vertex */
+    val rng = scala.util.Random
+
+    output.println("id,numPaths")
+    i = 0
+
+    while(sampleTrajectories.hasNext){
+      /* Progress */
+      if (i % 100 == 0){println(i)}
+      i = i + 1
+
+      /* Current trajectory */
+      val trajectory: Trajectory = sampleTrajectories
+        .next
+
+      var paths: BigInt = BigInt(1)
+      /* If the number of vertices for the trajectory is only two it means
+       * it has not participated in any swaps and the result will
+       * always be 1. */
+      if (verticesTrajectories(trajectory.id).length != 2){
+        /* Indices of the measurements to sample */
+        val sampleIndices: Array[Int] = rng
+          .shuffle(0 to (trajectory.measurements.length - 1))
+          .toArray
+          .take(N)
+
+        /* Sampled measurements */
+        val sampleMeasurements: Array[Measurement] = sampleIndices
+          .map(trajectory.measurements(_))
+
+        /* Find the chain of vertices. This includes the very first vertex of
+         * the trajectory but not the very last one, unless it happens
+         * to be the included as as a vertex right after a
+         * measurement. */
+        val verticesChainLinear: Array[Int] = sampleMeasurements
+          .foldLeft(Array(0)){
+            case (chain, m) =>
+              val i = verticesTrajectories(trajectory.id)
+                .indexWhere(_._2 > m.time, chain.last)
+
+              if(i == chain.last)
+                chain
+              else
+                chain ++ Array(i - 1, i)
+          }
+          .map(verticesTrajectories(trajectory.id)(_)._1)
+
+        /* Number of paths before the first measurement */
+        val numPathsBefore: BigInt = numPaths(verticesChainLinear(1))
+
+        /* Number of paths between measurements */
+        val numPathsBetween: Array[BigInt] = verticesChainLinear
+          .drop(2)
+          .dropRight(1)
+          .sliding(2, 2)
+          .map{vertices =>
+            val start: Int = vertices(0)
+            val end: Int = vertices(1)
+
+            val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+              (0 to indices.size - 1)
+                .map{i =>
+                  if (i == start)
+                    collection.mutable.Map((-1, -1) -> BigInt(1))
+                  else
+                    collection.mutable.Map((-1, -1) -> BigInt(0))
+                }
+                .toArray
+
+            numPathsIteration(children,
+              inDegrees, pathsInit, startVerticesLinear)(end)
+          }
+          .toArray
+
+        /* Number of paths after the last measurement */
+        val numPathsAfter: BigInt = numPathsReverse(verticesChainLinear.last)
+
+        paths = numPathsBefore*numPathsBetween.product*numPathsAfter
+      }
+
+      output.println(trajectory.id.toString + "," + paths.toString)
+    }
+
+    output.close()
   }
 
   /* Generates data for visualizing some trajectories from taxis in

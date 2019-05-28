@@ -2,6 +2,7 @@ import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
+import java.io._
 
 import SparkSessionHolder.spark.implicits._
 
@@ -199,5 +200,101 @@ object Swapmob {
     }
 
     paths.map(_.values.sum)
+  }
+
+  /* For every original trajectory in the graph compute the number of
+   * paths between its start and end vertex. Gives a mapping from
+   * trajectory id to the number of such paths. Optionally give a
+   * filename to write output to this file. */
+  def numPathsStartEnd(graph: Graph[Swap, Int], filename: String = ""):
+      Map[Int, BigInt] = {
+    /* If the filename is an empty string then don't output anything,
+     * otherwise write output to this file. */
+    val output = if (filename != ""){
+      Some(new PrintWriter(new File(filename)))
+    }else{
+      None
+    }
+
+    if (!output.isEmpty){
+      output.get.println("id,numPaths")
+    }
+
+    /* Map the vertices to a linear index starting from 0 */
+    val indices: Map[Long, Int] = graph
+      .vertices
+      .map(_._1)
+      .zipWithIndex
+      .collect
+      .toMap
+      .mapValues(_.toInt)
+
+    /* Find start and end vertices for all trajectories as given by the
+     * linear index. Gives a mapping from trajectory ids to linear
+     * vertex ids */
+    val trajectoriesStartVertices: Map[Int, Int] = graph
+      .vertices
+      .filter(v => v._2.time == Long.MinValue)
+      .map(v => (v._2.ids.head, v._1))
+      .collect
+      .map{case (id, i) => (id, indices(i))}
+      .toMap
+
+    val trajectoriesEndVertices: Map[Int, Int] = graph
+      .vertices
+      .filter(v => v._2.time == Long.MaxValue)
+      .map(v => (v._2.ids.head, v._1))
+      .collect
+      .map{case (id, i) => (id, indices(i))}
+      .toMap
+
+    /* Find the set of start and end vertices in the graph */
+    val startVertices: Set[Int] = trajectoriesStartVertices
+      .values
+      .toSet
+
+    val endVertices: Set[Int] = trajectoriesEndVertices
+      .values
+      .toSet
+
+    /* Precompute data for computing number of paths */
+    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, false)
+
+    val res: Map[Int, BigInt] = trajectoriesStartVertices
+      .keys
+      .toArray
+      .sorted
+      .map{id =>
+        /* Start and end vertex for the current trajectory */
+        val startVertex: Int = trajectoriesStartVertices(id)
+        val endVertex: Int = trajectoriesEndVertices(id)
+
+        val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+          (0 to indices.size - 1)
+            .map{i =>
+              if (i == startVertex)
+                collection.mutable.Map((-1, -1) -> BigInt(1))
+              else
+                collection.mutable.Map((-1, -1) -> BigInt(0))
+            }
+            .toArray
+
+        val numPaths: BigInt = numPathsIteration(children, inDegrees,
+          pathsInit, startVertices)(endVertex)
+
+        if (!output.isEmpty){
+          output.get.println(id.toString + "," + numPaths.toString)
+        }
+
+        (id, numPaths)
+      }
+      .toMap
+
+    if (!output.isEmpty){
+      output.get.close()
+    }
+
+    res
   }
 }

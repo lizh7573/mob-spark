@@ -202,6 +202,131 @@ object Swapmob {
     paths.map(_.values.sum)
   }
 
+  /* For every given measurement compute the number of paths passing
+   * through it. Optionally give a filename to write output to this
+   * file. */
+  def numPathsMeasurements(graph: Graph[Swap, Int],
+    ids: Dataset[Int],
+    measurements: Dataset[MeasurementID],
+    filename: String = "") = {
+    /* If the filename is an empty string then don't output anything,
+     * otherwise write output to this file. */
+    val output = if (filename != ""){
+      Some(new PrintWriter(new File(filename)))
+    }else{
+      None
+    }
+
+    if (!output.isEmpty){
+      output.get.println("id,numPaths")
+    }
+
+    /* Map the vertices to a linear index starting from 0 */
+    val indices: Map[Long, Int] = graph
+      .vertices
+      .map(_._1)
+      .zipWithIndex
+      .collect
+      .toMap
+      .mapValues(_.toInt)
+
+    /* Find the set of start and end vertices in the graph */
+    val startVertices: Set[Int] = graph
+      .vertices
+      .filter(_._2.time == Long.MinValue)
+      .map(_._1)
+      .collect
+      .map(indices(_))
+      .toSet
+
+    val endVertices: Set[Int] = graph
+      .vertices
+      .filter(_._2.time == Long.MaxValue)
+      .map(_._1)
+      .collect
+      .map(indices(_))
+      .toSet
+
+    /* Precompute data for computing number of paths */
+    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, false)
+    val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, true)
+
+    /* Compute the number of paths to the vertices going forward in the graph */
+    val numPaths: Array[BigInt] = {
+      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+        (0 to indices.size - 1)
+          .map{i =>
+            if (startVertices.contains(i))
+              collection.mutable.Map((-1, -1) -> BigInt(1))
+            else
+              collection.mutable.Map((-1, -1) -> BigInt(0))
+          }
+          .toArray
+
+      Swapmob.numPathsIteration(children, inDegrees, pathsInit,
+        startVertices)
+    }
+
+    /* Compute the number of paths to the vertices going backwards in the
+     * graph */
+    val numPathsReverse: Array[BigInt] = {
+      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+        (0 to indices.size - 1)
+          .map{i =>
+            if (endVertices.contains(i))
+              collection.mutable.Map((-1, -1) -> BigInt(1))
+            else
+              collection.mutable.Map((-1, -1) -> BigInt(0))
+          }
+          .toArray
+
+      Swapmob.numPathsIteration(childrenReverse, inDegreesReverse, pathsInit,
+        endVertices)
+    }
+
+    val vertices: Dataset[(VertexId, Swap)] = graph.vertices.toDS
+
+    val verticesTrajectories: Map[Int, Array[(Int, Long)]] = ids
+      .join(vertices, array_contains(vertices.col("_2.ids"), ids.col("id")))
+      .select($"id", $"_1".alias("vertexID"), $"_2.time".alias("time"))
+      .groupBy($"id")
+      .agg(collect_list(struct($"vertexID", $"time")).alias("vertices"))
+      .as[(Int, Array[(Long, Long)])]
+      .map{case (id, vertices) => (id, vertices.sortBy(_._2))}
+      .collect
+      .map{case (id, vertices) =>
+        (id, vertices.map{case (vertexID, time) => (indices(vertexID), time)})
+      }
+      .toMap
+
+    val res: Map[MeasurementID, BigInt] = measurements
+      .collect
+      .map{case MeasurementID(id, m) =>
+        val (vertexBefore: Int, vertexAfter: Int) = {
+          val i: Int = verticesTrajectories(id).indexWhere(_._2 > m.time)
+
+          (verticesTrajectories(id)(i - 1)._1, verticesTrajectories(id)(i)._1)
+        }
+
+        val paths: BigInt = numPaths(vertexBefore)*numPathsReverse(vertexAfter)
+
+        if (!output.isEmpty){
+          output.get.println(id.toString + "," + paths.toString)
+        }
+
+        (MeasurementID(id, m), paths)
+      }
+      .toMap
+
+    if (!output.isEmpty){
+      output.get.close()
+    }
+
+    res
+  }
+
   /* For every original trajectory in the graph compute the number of
    * paths between its start and end vertex. Gives a mapping from
    * trajectory id to the number of such paths. Optionally give a

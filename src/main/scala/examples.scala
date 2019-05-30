@@ -48,63 +48,14 @@ object Examples {
     val ids: Dataset[Int] = cotraj.select($"id").as[Int].cache
     val graph: Graph[Swap, Int] = swaps.graph(ids).cache
 
-    /* Compute total number of paths in the graph */
-    val indices: Map[Long, Int] = graph
-      .vertices
-      .map(_._1)
-      .zipWithIndex
-      .collect
-      .toMap
-      .mapValues(_.toInt)
-
-    /* Find start and end vertices in the graph */
-    val startVertices: Set[Int] = graph
-      .vertices
-      .filter(_._2.time == Long.MinValue)
-      .map(_._1)
-      .collect
-      .map(indices(_))
-      .toSet
-
-    val endVertices: Set[Int] = graph
-      .vertices
-      .filter(_._2.time == Long.MaxValue)
-      .map(_._1)
-      .collect
-      .map(indices(_))
-      .toSet
-
-    /* Precompute data for computing number of paths */
-    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
-      numPathsPreCompute(graph, indices, false)
-
-    /* Compute total number of paths in the graph */
-    val numPathsTotal: BigInt = {
-      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-      (0 to indices.size - 1)
-        .map{i =>
-          if (startVertices.contains(i))
-            collection.mutable.Map((-1, -1) -> BigInt(1))
-          else
-            collection.mutable.Map((-1, -1) -> BigInt(0))
-        }
-        .toArray
-
-      val numPaths: Array[BigInt] = Swapmob.numPathsIteration(children,
-        inDegrees, pathsInit, startVertices)
-
-      endVertices
-        .toIterator
-        .map(numPaths(_))
-        .sum
-    }
+    /* Find the total number of paths in the graph. */
+    val numPathsTotal: BigInt = Swapmob.numPathsTotal(graph)
 
     output.println("Number of possible paths in the DAG: " + numPathsTotal.toString)
     println("Number of possible paths in the DAG: " + numPathsTotal.toString)
 
     /* Look at the family of predicates given by knowing exactly one
      * measurement. */
-    /* Write data to csv file */
     val outputNumPathsMeasurementsName: String = "output/example1-1.csv"
     output.println("Output data about number of paths through measurements to " +
       outputNumPathsMeasurementsName)
@@ -260,28 +211,8 @@ object Examples {
       .graph(ids)
       .cache
 
-    /* Find start and end vertices in the graph. */
-    val startVertices: Set[Long] = graph
-      .vertices
-      .filter(_._2.time == Long.MinValue)
-      .map(_._1)
-      .collect
-      .toSet
-
-    val endVertices: Set[Long] = graph
-      .vertices
-      .filter(_._2.time == Long.MaxValue)
-      .map(_._1)
-      .collect
-      .toSet
-
-    val numPaths: Map[Long, BigInt] = Swapmob.numPaths(graph, startVertices)
-
     /* Compute total number of paths in the graph */
-    val numPathsTotal: BigInt = endVertices
-      .toIterator
-      .map(numPaths(_))
-      .sum
+    val numPathsTotal: BigInt = Swapmob.numPathsTotal(graph)
 
     output.println("Number of possible paths in the DAG: " + numPathsTotal.toString)
     println("Number of possible paths in the DAG: " + numPathsTotal.toString)

@@ -202,6 +202,27 @@ object Swapmob {
     paths.map(_.values.sum)
   }
 
+  /* Compute the total number of paths through the graph. */
+  def numPathsTotal(graph: Graph[Swap, Int]): BigInt = {
+    /* Start vertices using original vertex ids */
+    val startVertices: Set[Long] = graph
+      .vertices
+      .filter(_._2.time == Long.MinValue)
+      .map(_._1)
+      .collect
+      .toSet
+
+    val paths: Map[Long, BigInt] = numPaths(graph, startVertices)
+
+    graph
+      .vertices
+      .filter(_._2.time == Long.MaxValue)
+      .map(_._1)
+      .collect
+      .map(paths(_))
+      .sum
+  }
+
   /* For every given measurement compute the number of paths passing
    * through it. Optionally give a filename to write output to this
    * file. */

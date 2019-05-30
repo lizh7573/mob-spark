@@ -67,12 +67,12 @@ object Examples {
       outputNumPathsMeasurementsName)
 
     val m: MeasurementID = MeasurementID(2, Measurement(13L, Location(Array(2.5))))
-    val pathsM: BigInt = numPathsMeasurements.toArray.filter(_._1 == m).head._2
+    val numPathsM: BigInt = numPathsMeasurements.toArray.filter(_._1 == m).head._2
 
     output.println("Number of paths trough the measurement m = " + m.toString
-        + ": " + pathsM.toString)
+        + ": " + numPathsM.toString)
     println("Number of paths trough the measurement m = " + m.toString
-      + ": " + pathsM.toString)
+      + ": " + numPathsM.toString)
 
     /* Look at family of predicates given by knowing first and last
      * measurement. */
@@ -167,7 +167,6 @@ object Examples {
       + noSwaps.toString
       + " (" + (100.0*noSwaps/numTrajectories).toString + "%)")
 
-    /* Number of trajectories with less than 20 swaps */
     val less20Swaps: Long = numSwaps.filter(_._2 < 20).count
 
     output.println("Trajectories with less than 20 swaps: "
@@ -177,7 +176,6 @@ object Examples {
       + less20Swaps.toString
       + " (" + (100.0*less20Swaps/numTrajectories).toString + "%)")
 
-    /* Number of trajectories at least 20 swaps */
     val atLeast20Swaps: Long = numSwaps.filter(_._2 >= 20).count
 
     output.println("Trajectories with at least 20 swaps: "
@@ -187,14 +185,10 @@ object Examples {
       + atLeast20Swaps.toString
       + " (" + (100.0*atLeast20Swaps/numTrajectories).toString + "%)")
 
-    /* Write data about number of swaps to a csv file */
     val outputNumSwapsName: String = "output/example2-1.csv"
     val outputNumSwaps = new PrintWriter(new File(outputNumSwapsName))
-
-    output.println("Output data about number of swaps to "
-      + outputNumSwapsName)
-    println("Output data about number of swaps to "
-      + outputNumSwapsName)
+    output.println("Output data about number of swaps to " + outputNumSwapsName)
+    println("Output data about number of swaps to " + outputNumSwapsName)
 
     outputNumSwaps.println("id,numSwaps")
 
@@ -253,10 +247,8 @@ object Examples {
       .graph(ids)
       .cache
 
-    val seed = 42
-
     println("Computing number of paths")
-
+    val seed = 42
     Swapmob.numPathsMeasurements(graph, ids,
       cotraj.measurements.sample(false, fraction, seed), filename)
   }
@@ -305,9 +297,9 @@ object Examples {
   def example2NumPathsNMeasurements(N: Int = 4, sampleSize: Int = 20000) = {
     /* Open file for normal output */
     val filename = "output/example2NumPathsNMeasurements.csv"
-    val output = new PrintWriter(new File(filename))
     println("Output data to " + filename)
 
+    println("Computing graph")
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
       Preprocess.dropShort(
@@ -317,8 +309,6 @@ object Examples {
         10))
       .cache
 
-    val ids = cotraj.select($"id").as[Int].cache
-
     /* Compute possible swaps */
     val partitioning = (60L, 0.001)
     val swaps = cotraj
@@ -326,12 +316,11 @@ object Examples {
       .swaps(partitioning._1)
       .cache
 
-    /* Compute the DAG representation of SwapMob */
+    /* Compute the graph representation of SwapMob */
+    val ids = cotraj.select($"id").as[Int].cache
     val graph = swaps
       .graph(ids)
       .cache
-
-    println("Computed graph")
 
     /* We want to compute the number of paths in the graph for several
      * different start vertices. It is then much more efficient to

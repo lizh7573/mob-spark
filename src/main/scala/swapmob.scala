@@ -307,8 +307,9 @@ object Swapmob {
         endVertices)
     }
 
+    /* For every trajectory find the chain of vertices for it in the
+     * graph */
     val vertices: Dataset[(VertexId, Swap)] = graph.vertices.toDS
-
     val verticesTrajectories: Map[Int, Array[(Int, Long)]] = ids
       .join(vertices, array_contains(vertices.col("_2.ids"), ids.col("id")))
       .select($"id", $"_1".alias("vertexID"), $"_2.time".alias("time"))
@@ -436,6 +437,167 @@ object Swapmob {
         (id, numPaths)
       }
       .toMap
+
+    if (!output.isEmpty){
+      output.get.close()
+    }
+
+    res
+  }
+
+  /* For every given pair of id and array of measurements compute the
+   * number of paths going through all those measurements. */
+  def numPathsNMeasurements(graph: Graph[Swap, Int],
+    ids: Dataset[Int],
+    measurements: Array[(Int, Array[Measurement])],
+    filename: String = ""): Array[BigInt] = {
+    /* If the filename is an empty string then don't output anything,
+     * otherwise write output to this file. */
+    val output = if (filename != ""){
+      Some(new PrintWriter(new File(filename)))
+    }else{
+      None
+    }
+
+    if (!output.isEmpty){
+      output.get.println("id,numPaths")
+    }
+
+    /* Map the vertices to a linear index starting from 0 */
+    val indices: Map[Long, Int] = graph
+      .vertices
+      .map(_._1)
+      .zipWithIndex
+      .collect
+      .toMap
+      .mapValues(_.toInt)
+
+    /* Find the set of start and end vertices in the graph */
+    val startVertices: Set[Int] = graph
+      .vertices
+      .filter(_._2.time == Long.MinValue)
+      .map(_._1)
+      .collect
+      .map(indices(_))
+      .toSet
+
+    val endVertices: Set[Int] = graph
+      .vertices
+      .filter(_._2.time == Long.MaxValue)
+      .map(_._1)
+      .collect
+      .map(indices(_))
+      .toSet
+
+    /* Precompute data for computing number of paths */
+    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, false)
+    val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
+      numPathsPreCompute(graph, indices, true)
+
+    /* Compute the number of paths to the vertices going forward in the graph */
+    val numPaths: Array[BigInt] = {
+      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+        (0 to indices.size - 1)
+          .map{i =>
+            if (startVertices.contains(i))
+              collection.mutable.Map((-1, -1) -> BigInt(1))
+            else
+              collection.mutable.Map((-1, -1) -> BigInt(0))
+          }
+          .toArray
+
+      Swapmob.numPathsIteration(children, inDegrees, pathsInit,
+        startVertices)
+    }
+
+    /* Compute the number of paths to the vertices going backwards in the
+     * graph */
+    val numPathsReverse: Array[BigInt] = {
+      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+        (0 to indices.size - 1)
+          .map{i =>
+            if (endVertices.contains(i))
+              collection.mutable.Map((-1, -1) -> BigInt(1))
+            else
+              collection.mutable.Map((-1, -1) -> BigInt(0))
+          }
+          .toArray
+
+      Swapmob.numPathsIteration(childrenReverse, inDegreesReverse, pathsInit,
+        endVertices)
+    }
+
+    /* For every trajectory find the chain of vertices for it in the
+     * graph */
+    val vertices: Dataset[(VertexId, Swap)] = graph.vertices.toDS
+    val verticesTrajectories: Map[Int, Array[(Int, Long)]] = ids
+      .join(vertices, array_contains(vertices.col("_2.ids"), ids.col("id")))
+      .select($"id", $"_1".alias("vertexID"), $"_2.time".alias("time"))
+      .groupBy($"id")
+      .agg(collect_list(struct($"vertexID", $"time")).alias("vertices"))
+      .as[(Int, Array[(Long, Long)])]
+      .map{case (id, vertices) => (id, vertices.sortBy(_._2))}
+      .collect
+      .map{case (id, vertices) =>
+        (id, vertices.map{case (vertexID, time) => (indices(vertexID), time)})
+      }
+      .toMap
+
+    val res: Array[BigInt] = measurements
+      .map{case (id, ms) =>
+        /* Find the chain of vertices. That is, for every measurement find the
+         * vertex occurring right before and right after it. In case
+         * several measurement fall in between the same vertices only
+         * keep them once. */
+        val verticesChain: Array[Int] = ms
+          .map(m => verticesTrajectories(id).indexWhere(_._2 > m.time))
+          .distinct
+          .flatMap(i => verticesTrajectories(id).slice(i - 1, i + 1).map(_._1))
+
+        /* Number of paths before the first measurement */
+        val numPathsBefore: BigInt = numPaths(verticesChain.head)
+
+        /* Number of paths between measurements */
+        val numPathsBetween: BigInt = verticesChain
+          .drop(1)
+          .dropRight(1)
+          .sliding(2, 2)
+          .map{vertices =>
+            val start: Int = vertices(0)
+            val end: Int = vertices(1)
+
+            if (start == end){
+              /* If start and end vertices are the same there is only ever one path
+               * between them */
+              BigInt(1)
+            }else{
+              val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
+                (0 to indices.size - 1)
+                  .map{i =>
+                    if (i == start)
+                      collection.mutable.Map((-1, -1) -> BigInt(1))
+                    else
+                      collection.mutable.Map((-1, -1) -> BigInt(0))
+                  }
+                  .toArray
+
+              numPathsIteration(children, inDegrees, pathsInit, startVertices)(end)
+            }
+          }
+          .product
+
+        /* Number of paths after the last measurement */
+        val numPathsAfter: BigInt = numPathsReverse(verticesChain.last)
+
+        val paths: BigInt = numPathsBefore*numPathsBetween*numPathsAfter
+
+        if (!output.isEmpty){
+          output.get.println(id.toString + "," + paths.toString)
+        }
+
+        paths
+      }
 
     if (!output.isEmpty){
       output.get.close()

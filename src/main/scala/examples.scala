@@ -8,6 +8,18 @@ object Examples {
   val spark = SparkSessionHolder.spark
   import spark.implicits._
 
+  /* Helper function for sampling N distinct elements from an array
+   * keeping the original ordering. */
+  def sample(from: Array[Measurement], N: Int, rng: scala.util.Random) = {
+    /* Sample indices to take */
+    val indices: scala.collection.immutable.IndexedSeq[Int] = rng
+      .shuffle(0 to (from.length - 1))
+      .take(N)
+      .sorted
+
+    indices.map(from(_)).toArray
+  }
+
   /* An example with an artifical co-trajectory, i.e. not using real
    * data. It parses the co-trajectory and gives some basic stats
    * about it. It then computes the possible swaps and again give some
@@ -322,200 +334,16 @@ object Examples {
       .graph(ids)
       .cache
 
-    /* We want to compute the number of paths in the graph for several
-     * different start vertices. It is then much more efficient to
-     * pre-compute the required data and use numPathsIteration instead
-     * of calling numPaths several time. We precompute the data
-     * here. We do it for both the graph and the reversed graph. */
-
-    /* Map the vertices to a linear index starting from 0 */
-    val indices: Map[Long, Int] = graph
-      .vertices
-      .map(_._1)
-      .zipWithIndex
-      .collect
-      .toMap
-      .mapValues(_.toInt)
-
-    val indicesInverse: Map[Int, Long] = for ((v, i) <- indices) yield (i, v)
-
-    /* Find start and end vertices in the graph */
-    val startVertices: Set[Long] = graph
-      .vertices
-      .filter(_._2.time == Long.MinValue)
-      .map(_._1)
-      .collect
-      .toSet
-
-    val startVerticesLinear: Set[Int] = startVertices.map(indices(_))
-
-    val endVertices: Set[Long] = graph
-      .vertices
-      .filter(_._2.time == Long.MaxValue)
-      .map(_._1)
-      .collect
-      .toSet
-
-    val endVerticesLinear: Set[Int] = endVertices.map(indices(_))
-
-    /* Precompute data for computing number of paths */
-    val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
-      numPathsPreCompute(graph, indices, false)
-    val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
-      numPathsPreCompute(graph, indices, true)
-
-    /* Compute the number of paths to the vertices going forward in the graph */
-    val numPaths: Array[BigInt] = {
-      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-        (0 to indices.size - 1)
-          .map{i =>
-            if (startVerticesLinear.contains(i))
-              collection.mutable.Map((-1, -1) -> BigInt(1))
-            else
-              collection.mutable.Map((-1, -1) -> BigInt(0))
-          }
-          .toArray
-
-      Swapmob.numPathsIteration(children, inDegrees, pathsInit,
-        startVerticesLinear)
-    }
-
-    /* Compute the number of paths to the vertices going backwards in the
-     * graph */
-    val numPathsReverse: Array[BigInt] = {
-      val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-        (0 to indices.size - 1)
-          .map{i =>
-            if (endVerticesLinear.contains(i))
-              collection.mutable.Map((-1, -1) -> BigInt(1))
-            else
-              collection.mutable.Map((-1, -1) -> BigInt(0))
-          }
-          .toArray
-
-      Swapmob.numPathsIteration(childrenReverse, inDegreesReverse, pathsInit,
-        endVerticesLinear)
-    }
-
-    println("Computed paths")
-
-    /* For every trajectory find the chain of vertices for it in the
-     * graph */
-    var i = 0
-    val verticesTrajectories: Map[Int, Array[(Int, Long)]] = ids
-      .collect
-      .map{id =>
-
-        if (i % 100 == 0){println(i)}
-        i = i + 1
-
-        (id, graph
-          .vertices
-          .filter(_._2.ids.contains(id))
-          .collect
-          .sortBy(_._2.time)
-          .map{case (v, swap) => (indices(v), swap.time)})
-      }
-      .toMap
-
-    println("Computed chain of vertices for trajectories")
-
     /* Sample the data, sample trajectories with replacement and for
      * each trajectory sample measurements without replacement. */
-    val sampleTrajectories: java.util.Iterator[Trajectory] = cotraj
-      .sample(true, sampleSize/cotraj.count)
-      .toLocalIterator
+    val seed = 42
+    val rng = new scala.util.Random(seed)
+    val sampleMeasurements: Array[(Int, Array[Measurement])] = cotraj
+      .sample(true, sampleSize/cotraj.count, seed)
+      .collect
+      .map(r => (r.id, sample(r.measurements, N, rng)))
 
-    /* For every sample trajectory find N random measurements and compute
-     * the number of paths
-
-     - Find the vertices before and after the measurements
-     - Compute the number of paths before the first vertex
-     - Compute the number of paths between the vertices
-     - Compute the number of paths after the last vertex */
-    val rng = scala.util.Random
-
-    output.println("id,numPaths")
-    i = 0
-
-    while(sampleTrajectories.hasNext){
-      /* Progress */
-      if (i % 100 == 0){println(i)}
-      i = i + 1
-
-      /* Current trajectory */
-      val trajectory: Trajectory = sampleTrajectories
-        .next
-
-      var paths: BigInt = BigInt(1)
-      /* If the number of vertices for the trajectory is only two it means
-       * it has not participated in any swaps and the result will
-       * always be 1. */
-      if (verticesTrajectories(trajectory.id).length != 2){
-        /* Indices of the measurements to sample */
-        val sampleIndices: Array[Int] = rng
-          .shuffle(0 to (trajectory.measurements.length - 1))
-          .toArray
-          .take(N)
-
-        /* Sampled measurements */
-        val sampleMeasurements: Array[Measurement] = sampleIndices
-          .map(trajectory.measurements(_))
-
-        /* Find the chain of vertices. This includes the very first vertex of
-         * the trajectory but not the very last one, unless it happens
-         * to be the included as as a vertex right after a
-         * measurement. */
-        val verticesChainLinear: Array[Int] = sampleMeasurements
-          .foldLeft(Array(0)){
-            case (chain, m) =>
-              val i = verticesTrajectories(trajectory.id)
-                .indexWhere(_._2 > m.time, chain.last)
-
-              if(i == chain.last)
-                chain
-              else
-                chain ++ Array(i - 1, i)
-          }
-          .map(verticesTrajectories(trajectory.id)(_)._1)
-
-        /* Number of paths before the first measurement */
-        val numPathsBefore: BigInt = numPaths(verticesChainLinear(1))
-
-        /* Number of paths between measurements */
-        val numPathsBetween: Array[BigInt] = verticesChainLinear
-          .drop(2)
-          .dropRight(1)
-          .sliding(2, 2)
-          .map{vertices =>
-            val start: Int = vertices(0)
-            val end: Int = vertices(1)
-
-            val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-              (0 to indices.size - 1)
-                .map{i =>
-                  if (i == start)
-                    collection.mutable.Map((-1, -1) -> BigInt(1))
-                  else
-                    collection.mutable.Map((-1, -1) -> BigInt(0))
-                }
-                .toArray
-
-            numPathsIteration(children,
-              inDegrees, pathsInit, startVerticesLinear)(end)
-          }
-          .toArray
-
-        /* Number of paths after the last measurement */
-        val numPathsAfter: BigInt = numPathsReverse(verticesChainLinear.last)
-
-        paths = numPathsBefore*numPathsBetween.product*numPathsAfter
-      }
-
-      output.println(trajectory.id.toString + "," + paths.toString)
-    }
-
-    output.close()
+    Swapmob.numPathsNMeasurements(graph, ids, sampleMeasurements, filename)
   }
 
   /* Generates data for visualizing some trajectories from taxis in

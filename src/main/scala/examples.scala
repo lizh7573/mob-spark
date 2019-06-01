@@ -3,6 +3,7 @@ import Swapmob._
 import org.apache.spark.sql.Dataset
 import org.apache.spark.graphx._
 import java.io._
+import scala.collection.JavaConversions._
 
 object Examples {
   val spark = SparkSessionHolder.spark
@@ -68,18 +69,27 @@ object Examples {
 
     /* Look at the family of predicates given by knowing exactly one
      * measurement. */
+
+
+    val numPathsMeasurements: Dataset[(MeasurementID, BigInt)] =
+      Swapmob.numPathsMeasurements(graph, ids, cotraj.measurements)
+
     val outputNumPathsMeasurementsName: String = "output/example1-1.csv"
+    val outputNumPathsMeasurements = new PrintWriter(new File(outputNumPathsMeasurementsName))
     output.println("Output data about number of paths through measurements to " +
       outputNumPathsMeasurementsName)
     println("Output data about number of paths through measurements to " +
       outputNumPathsMeasurementsName)
 
-    val numPathsMeasurements: Map[MeasurementID, BigInt] =
-      Swapmob.numPathsMeasurements(graph, ids, cotraj.measurements,
-      outputNumPathsMeasurementsName)
+    numPathsMeasurements
+      .map(x => x._1.id.toString + "," + x._2.toString)
+      .toLocalIterator
+      .foreach(outputNumPathsMeasurements.println(_))
+
+    outputNumPathsMeasurements.close()
 
     val m: MeasurementID = MeasurementID(2, Measurement(13L, Location(Array(2.5))))
-    val numPathsM: BigInt = numPathsMeasurements.toArray.filter(_._1 == m).head._2
+    val numPathsM: BigInt = numPathsMeasurements.filter(_._1 == m).head._2
 
     output.println("Number of paths trough the measurement m = " + m.toString
         + ": " + numPathsM.toString)
@@ -231,10 +241,7 @@ object Examples {
    * in the thesis. The fraction parameter indicates the fraction of
    * measurements that should be sampled. */
   def example2NumPathsMeasurements(fraction: Double = 0.05):
-      Map[MeasurementID, BigInt] = {
-    val filename = "output/example2NumPathsMeasurements.csv"
-    println("Output data to " + filename)
-
+      Dataset[(MeasurementID, BigInt)] = {
     println("Computing graph")
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -259,10 +266,23 @@ object Examples {
       .graph(ids)
       .cache
 
-    println("Computing number of paths")
     val seed = 42
-    Swapmob.numPathsMeasurements(graph, ids,
-      cotraj.measurements.sample(false, fraction, seed), filename)
+    val numPathsMeasurements: Dataset[(MeasurementID, BigInt)] =
+      Swapmob.numPathsMeasurements(graph, ids,
+        cotraj.measurements.sample(false, fraction, seed))
+
+    val filename = "output/example2NumPathsMeasurements.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Outputting data to " + filename)
+
+    numPathsMeasurements
+      .map(x => x._1.id.toString + "," + x._2.toString)
+      .toLocalIterator
+      .foreach(output.println(_))
+
+    output.close()
+
+    numPathsMeasurements
   }
 
   /* Given that we know the first and last measurement of a trajectory,

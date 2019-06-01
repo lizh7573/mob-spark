@@ -228,20 +228,8 @@ object Swapmob {
    * file. */
   def numPathsMeasurements(graph: Graph[Swap, Int],
     ids: Dataset[Int],
-    measurements: Dataset[MeasurementID],
-    filename: String = "") = {
-    /* If the filename is an empty string then don't output anything,
-     * otherwise write output to this file. */
-    val output = if (filename != ""){
-      Some(new PrintWriter(new File(filename)))
-    }else{
-      None
-    }
-
-    if (!output.isEmpty){
-      output.get.println("id,numPaths")
-    }
-
+    measurements: Dataset[MeasurementID]): Dataset[(MeasurementID, BigInt)] = {
+    println("Precomputing data")
     /* Map the vertices to a linear index starting from 0 */
     val indices: Map[Long, Int] = graph
       .vertices
@@ -274,6 +262,7 @@ object Swapmob {
     val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
       numPathsPreCompute(graph, indices, true)
 
+    println("Computing number of paths for the whole graph")
     /* Compute the number of paths to the vertices going forward in the graph */
     val numPaths: Array[BigInt] = {
       val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
@@ -307,6 +296,7 @@ object Swapmob {
         endVertices)
     }
 
+    println("Computing chain of vertices")
     /* For every trajectory find the chain of vertices for it in the
      * graph */
     val vertices: Dataset[(VertexId, Swap)] = graph.vertices.toDS
@@ -323,30 +313,22 @@ object Swapmob {
       }
       .toMap
 
-    val res: Map[MeasurementID, BigInt] = measurements
-      .collect
+    val bcNumPaths = sc.broadcast(numPaths)
+    val bcNumPathsReverse = sc.broadcast(numPathsReverse)
+    val bcVerticesTrajectories = sc.broadcast(verticesTrajectories)
+
+    println("Computing number of paths trough measurements")
+    measurements
       .map{case MeasurementID(id, m) =>
-        val (vertexBefore: Int, vertexAfter: Int) = {
-          val i: Int = verticesTrajectories(id).indexWhere(_._2 > m.time)
+        val i: Int = bcVerticesTrajectories.value(id).indexWhere(_._2 > m.time)
 
-          (verticesTrajectories(id)(i - 1)._1, verticesTrajectories(id)(i)._1)
-        }
+        val vertexBefore: Int = bcVerticesTrajectories.value(id)(i - 1)._1
+        val vertexAfter: Int = bcVerticesTrajectories.value(id)(i)._1
 
-        val paths: BigInt = numPaths(vertexBefore)*numPathsReverse(vertexAfter)
-
-        if (!output.isEmpty){
-          output.get.println(id.toString + "," + paths.toString)
-        }
+        val paths: BigInt = bcNumPaths.value(vertexBefore)*bcNumPathsReverse.value(vertexAfter)
 
         (MeasurementID(id, m), paths)
       }
-      .toMap
-
-    if (!output.isEmpty){
-      output.get.close()
-    }
-
-    res
   }
 
   /* For every original trajectory in the graph compute the number of

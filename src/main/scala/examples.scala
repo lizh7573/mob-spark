@@ -81,6 +81,7 @@ object Examples {
     println("Output data about number of paths through measurements to " +
       outputNumPathsMeasurementsName)
 
+    outputNumPathsMeasurements.println("id,numPaths")
     numPathsMeasurements
       .map(x => x._1.id.toString + "," + x._2.toString)
       .toLocalIterator
@@ -98,18 +99,23 @@ object Examples {
 
     /* Look at family of predicates given by knowing first and last
      * measurement. */
+    val numPathsStartEnd: Array[(Int, BigInt)] = Swapmob.numPathsStartEnd(graph)
+
     val outputNumPathsStartEndName: String = "output/example1-2.csv"
+    val outputNumPathsStartEnd = new PrintWriter(new File(outputNumPathsStartEndName))
     output.println("Output data about number of paths starting and ending at a" +
       " the same vertices as trajectory i to " + outputNumPathsStartEndName)
     println("Output data about number of paths starting and ending at a" +
       " the same vertices as trajectory i to " + outputNumPathsStartEndName)
 
-    val numPathsStartEnd: Map[Int, BigInt] = Swapmob.numPathsStartEnd(graph,
-      outputNumPathsStartEndName)
+    outputNumPathsStartEnd.println("id,numPaths")
+    numPathsStartEnd
+      .map(x => x._1.toString + "," + x._2.toString)
+      .foreach(outputNumPathsStartEnd.println(_))
 
-    ids.collect.sorted.foreach{id =>
-      val numPaths: BigInt = numPathsStartEnd(id)
+    outputNumPathsStartEnd.close()
 
+    numPathsStartEnd.foreach{case (id, numPaths) =>
       output.println("id = " + id.toString + ": " + numPaths)
       println("id = " + id.toString + ": " + numPaths)
     }
@@ -275,6 +281,7 @@ object Examples {
     val output = new PrintWriter(new File(filename))
     println("Outputting data to " + filename)
 
+    output.println("id,numPaths")
     numPathsMeasurements
       .map(x => x._1.id.toString + "," + x._2.toString)
       .toLocalIterator
@@ -290,10 +297,6 @@ object Examples {
    * original trajectories. This corresponds to the second family of
    * predicates in the thesis. */
   def example2NumPathsStartEnd() = {
-    /* File to write data to */
-    val filename = "output/example2NumPathsStartEnd.csv"
-    println("Output data to " + filename)
-
     println("Computing graph")
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -317,8 +320,18 @@ object Examples {
       .graph(ids)
       .cache
 
-    println("Computing number of paths")
-    Swapmob.numPathsStartEnd(graph, filename)
+    val numPathsStartEnd: Array[(Int, BigInt)] = Swapmob.numPathsStartEnd(graph)
+
+    val filename = "output/example2NumPathsStartEnd.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Outputting data to " + filename)
+
+    output.println("id,numPaths")
+    numPathsStartEnd
+      .map(x => x._1.toString + "," + x._2.toString)
+      .foreach(output.println(_))
+
+    output.close()
   }
 
   /* Given that we know the N measurements of a trajectory, give the
@@ -327,10 +340,6 @@ object Examples {
    * sample size determines the number of samples to consider, this is
    * not an exact number but an approximate one. */
   def example2NumPathsNMeasurements(N: Int = 4, sampleSize: Int = 20000) = {
-    /* Open file for normal output */
-    val filename = "output/example2NumPathsNMeasurements.csv"
-    println("Output data to " + filename)
-
     println("Computing graph")
     /* Parse the co-trajectory */
     val cotraj = CoTrajectoryUtils.getCoTrajectory(
@@ -363,7 +372,19 @@ object Examples {
       .collect
       .map(r => (r.id, sample(r.measurements, N, rng)))
 
-    Swapmob.numPathsNMeasurements(graph, ids, sampleMeasurements, filename)
+    val numPathsNMeasurements: Array[BigInt] =
+      Swapmob.numPathsNMeasurements(graph, ids, sampleMeasurements)
+
+    val filename = "output/example2NumPathsNMeasurements.csv"
+    val output = new PrintWriter(new File(filename))
+    println("Outputting data to " + filename)
+
+    output.println("id,numPaths")
+    numPathsNMeasurements
+      .map(_.toString)
+      .foreach(output.println(_))
+
+    output.close()
   }
 
   /* Generates data for visualizing some trajectories from taxis in

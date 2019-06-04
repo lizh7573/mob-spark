@@ -102,7 +102,8 @@ object Swapmob {
         .filter(inDegrees(_) == 0)
         .toSet
 
-    val res = numPathsIteration(children, inDegrees, paths, activeVertices, verbose)
+    val res = numPathsIteration(children, inDegrees, paths, activeVertices,
+      Set(): Set[Int], verbose)
 
     (0 to indices.size - 1)
       .map(i => (indicesInverse(i), res(i)))
@@ -166,13 +167,17 @@ object Swapmob {
   def numPathsIteration(children: Array[Array[(Int, Int)]],
     inDegrees: Array[Int],
     paths: Array[collection.mutable.Map[(Int, Int), BigInt]],
-    activeVerticesStart: Set[Int],
+    startVertices: Set[Int],
+    endVertices: Set[Int] = Set(),
     verbose: Boolean = false):
       Array[BigInt] = {
-    var activeVertices = collection.mutable.Set() ++ activeVerticesStart
+    val checkEndVertices: Boolean = !endVertices.isEmpty
+
+    var activeVertices = collection.mutable.Set() ++ startVertices
+    var remainingVertices = collection.mutable.Set() ++ endVertices
     var i = 0
 
-    while(!activeVertices.isEmpty){
+    while(!activeVertices.isEmpty && !(checkEndVertices && remainingVertices.isEmpty)){
       if(verbose){println(i.toString ++ ": " ++ activeVertices.size.toString)}
       i = i + 1
 
@@ -194,6 +199,10 @@ object Swapmob {
             newVertices += c
           }
         }
+
+        /* Remove the just activated vertex from the set of end vertices to be
+         * reached. */
+        remainingVertices -= v
       }
 
       activeVertices = newVertices
@@ -335,20 +344,9 @@ object Swapmob {
    * paths between its start and end vertex. Gives a mapping from
    * trajectory id to the number of such paths. Optionally give a
    * filename to write output to this file. */
-  def numPathsStartEnd(graph: Graph[Swap, Int], filename: String = ""):
-      Map[Int, BigInt] = {
-    /* If the filename is an empty string then don't output anything,
-     * otherwise write output to this file. */
-    val output = if (filename != ""){
-      Some(new PrintWriter(new File(filename)))
-    }else{
-      None
-    }
-
-    if (!output.isEmpty){
-      output.get.println("id,numPaths")
-    }
-
+  def numPathsStartEnd(graph: Graph[Swap, Int]):
+      Array[(Int, BigInt)] = {
+    println("Precomputing data")
     /* Map the vertices to a linear index starting from 0 */
     val indices: Map[Long, Int] = graph
       .vertices
@@ -377,30 +375,41 @@ object Swapmob {
       .map{case (id, i) => (id, indices(i))}
       .toMap
 
-    /* Find the set of start and end vertices in the graph */
-    val startVertices: Set[Int] = trajectoriesStartVertices
-      .values
-      .toSet
-
-    val endVertices: Set[Int] = trajectoriesEndVertices
-      .values
-      .toSet
+    val trajectoriesStartEndVertices: Dataset[(Int, Int, Int)] = SparkSessionHolder
+      .spark
+      .createDataset(trajectoriesStartVertices
+        .keys
+        .map{id =>
+          (id, trajectoriesStartVertices(id), trajectoriesEndVertices(id))
+        }
+        .toArray
+      )
+      .sort($"_1")
 
     /* Precompute data for computing number of paths */
     val (children, inDegrees): (Array[Array[(Int, Int)]], Array[Int]) =
       numPathsPreCompute(graph, indices, false)
 
-    val res: Map[Int, BigInt] = trajectoriesStartVertices
-      .keys
-      .toArray
-      .sorted
-      .map{id =>
-        /* Start and end vertex for the current trajectory */
-        val startVertex: Int = trajectoriesStartVertices(id)
-        val endVertex: Int = trajectoriesEndVertices(id)
+    /* Find the set of start and end vertices in the graph */
+    val startVertices: Set[Int] = trajectoriesStartVertices
+      .map(_._2)
+      .toSet
 
+    val numIndices: Int = indices.size
+
+    val stepSize: Int = 20
+    val perLine: Int = 50
+    var i: Int = 0
+    println("Computing number of paths between start and end vertex")
+    println("Number of steps to compute: "
+      + trajectoriesStartEndVertices.count.toString)
+    println("Every dot is " + stepSize.toString + " steps, " + perLine.toString + " per line")
+
+    trajectoriesStartEndVertices
+      .collect
+      .map{case (id, startVertex, endVertex) =>
         val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
-          (0 to indices.size - 1)
+          (0 to numIndices - 1)
             .map{i =>
               if (i == startVertex)
                 collection.mutable.Map((-1, -1) -> BigInt(1))
@@ -409,42 +418,31 @@ object Swapmob {
             }
             .toArray
 
-        val numPaths: BigInt = numPathsIteration(children, inDegrees,
-          pathsInit, startVertices)(endVertex)
+        val numPaths: BigInt = numPathsIteration(children,
+          inDegrees,
+          pathsInit,
+          startVertices,
+          Set(endVertex))(endVertex)
 
-        if (!output.isEmpty){
-          output.get.println(id.toString + "," + numPaths.toString)
+        i = i + 1
+        if(i % stepSize == 0){
+          print(".")
+        }
+        if(i % (perLine*stepSize) == 0){
+          print("\n")
         }
 
         (id, numPaths)
       }
-      .toMap
-
-    if (!output.isEmpty){
-      output.get.close()
-    }
-
-    res
   }
 
   /* For every given pair of id and array of measurements compute the
    * number of paths going through all those measurements. */
   def numPathsNMeasurements(graph: Graph[Swap, Int],
     ids: Dataset[Int],
-    measurements: Array[(Int, Array[Measurement])],
-    filename: String = ""): Array[BigInt] = {
-    /* If the filename is an empty string then don't output anything,
-     * otherwise write output to this file. */
-    val output = if (filename != ""){
-      Some(new PrintWriter(new File(filename)))
-    }else{
-      None
-    }
-
-    if (!output.isEmpty){
-      output.get.println("id,numPaths")
-    }
-
+    measurements: Array[(Int, Array[Measurement])]):
+      Array[BigInt] = {
+    println("Precomputing data")
     /* Map the vertices to a linear index starting from 0 */
     val indices: Map[Long, Int] = graph
       .vertices
@@ -477,6 +475,7 @@ object Swapmob {
     val (childrenReverse, inDegreesReverse): (Array[Array[(Int, Int)]], Array[Int]) =
       numPathsPreCompute(graph, indices, true)
 
+    println("Computing number of paths for the whole graph")
     /* Compute the number of paths to the vertices going forward in the graph */
     val numPaths: Array[BigInt] = {
       val pathsInit: Array[collection.mutable.Map[(Int, Int), BigInt]] =
@@ -510,6 +509,7 @@ object Swapmob {
         endVertices)
     }
 
+    println("Computing chain of vertices")
     /* For every trajectory find the chain of vertices for it in the
      * graph */
     val vertices: Dataset[(VertexId, Swap)] = graph.vertices.toDS
@@ -526,7 +526,13 @@ object Swapmob {
       }
       .toMap
 
-    val res: Array[BigInt] = measurements
+    val stepSize: Int = 20
+    val perLine: Int = 50
+    var i: Int = 0
+    println("Computing number of paths trough measurements")
+    println("Number of steps to compute: " + measurements.length)
+    println("Every dot is " + stepSize.toString + " steps, " + perLine.toString + " per line")
+    measurements
       .map{case (id, ms) =>
         /* Find the chain of vertices. That is, for every measurement find the
          * vertex occurring right before and right after it. In case
@@ -539,7 +545,7 @@ object Swapmob {
 
         /* Number of paths before the first measurement */
         val numPathsBefore: BigInt = numPaths(verticesChain.head)
-
+        print("|")
         /* Number of paths between measurements */
         val numPathsBetween: BigInt = verticesChain
           .drop(1)
@@ -564,27 +570,23 @@ object Swapmob {
                   }
                   .toArray
 
-              numPathsIteration(children, inDegrees, pathsInit, startVertices)(end)
+              numPathsIteration(children, inDegrees, pathsInit, startVertices, Set(end))(end)
             }
           }
           .product
-
+        print(".")
         /* Number of paths after the last measurement */
         val numPathsAfter: BigInt = numPathsReverse(verticesChain.last)
 
-        val paths: BigInt = numPathsBefore*numPathsBetween*numPathsAfter
-
-        if (!output.isEmpty){
-          output.get.println(id.toString + "," + paths.toString)
+        i = i + 1
+        if(i % stepSize == 0){
+          print(".")
+        }
+        if(i % (perLine*stepSize) == 0){
+          print("\n")
         }
 
-        paths
+        numPathsBefore*numPathsBetween*numPathsAfter
       }
-
-    if (!output.isEmpty){
-      output.get.close()
-    }
-
-    res
   }
 }

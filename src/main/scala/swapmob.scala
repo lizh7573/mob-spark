@@ -545,7 +545,7 @@ object Swapmob {
 
         /* Number of paths before the first measurement */
         val numPathsBefore: BigInt = numPaths(verticesChain.head)
-        print("|")
+
         /* Number of paths between measurements */
         val numPathsBetween: BigInt = verticesChain
           .drop(1)
@@ -574,7 +574,7 @@ object Swapmob {
             }
           }
           .product
-        print(".")
+
         /* Number of paths after the last measurement */
         val numPathsAfter: BigInt = numPathsReverse(verticesChain.last)
 

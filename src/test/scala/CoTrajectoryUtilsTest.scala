@@ -1,7 +1,7 @@
 import org.apache.spark.sql.SparkSession
 import CoTrajectoryUtils._
 
-class CoTrajectoryTest extends org.scalatest.FunSuite {
+class CoTrajectoryUtilsTest extends org.scalatest.FunSuite {
   val spark = SparkSessionHolder.spark
   import spark.implicits._
 

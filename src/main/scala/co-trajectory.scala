@@ -6,21 +6,21 @@ import SparkSessionHolder.spark.implicits._
 
 object CoTrajectoryUtils {
 
-  /* Takes a set of measurements with IDs and returns the
+  /* Takes a dataset of measurements with IDs and returns the
    * corresponding co-trajectory. */
   def getCoTrajectory(data: Dataset[MeasurementID]): Dataset[Trajectory] =
     data.groupBy("id")
       .agg(collect_set($"measurement").alias("measurements"))
       .as[Trajectory]
-      .map(r => Trajectory(r.id, r.measurements.sortBy(_.time)))
+      .map(_.normalize())
 
-  /* Takes a set of grid measurements with IDs and returns the
+  /* Takes a dataset of grid measurements with IDs and returns the
    * corresponding co-trajectory. */
   def getCoTrajectoryGrid(data: Dataset[GridID]): Dataset[TrajectoryGrid] =
     data.groupBy("id")
       .agg(collect_set($"grid").alias("grids"))
       .as[TrajectoryGrid]
-      .map(r => TrajectoryGrid(r.id, r.grids.sortBy(_.time)))
+      .map(_.normalize)
 
   /* An implicit class for a co-trajectory consisting of measurements.
    * Most of the co-trajectory specific methods are implemented

@@ -5,7 +5,7 @@ class CoTrajectoryTest extends org.scalatest.FunSuite {
   val spark = SparkSessionHolder.spark
   import spark.implicits._
 
-  val cotraj1 = Parse.testCoTrajectory("data/test/cotraj-test-1.txt")
+  val cotraj1 = Parse.example("data/test/cotraj-test-1.txt")
 
   test("CoTrajectoryGrid.swaps") {
     val partitioning = (10L, 0.2)

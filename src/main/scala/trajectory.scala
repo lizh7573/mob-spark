@@ -114,6 +114,11 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
     Trajectory(id, measurements.filter(m => m.time >= start && m.time < end))
   }
 
+  /* Keep only the measurements occurring withing the given box. */
+  def filterBox(box: Array[(Double, Double)]): Trajectory = {
+    Trajectory(id, measurements.filter(_.location.isInBox(box)))
+  }
+
   /* Splits the measurements of the array by their date. This method
    * assumes that the time for the measurements is Unix-time. Returns
    * an array of tuples where the first element corresponds to the

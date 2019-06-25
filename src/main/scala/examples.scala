@@ -32,7 +32,7 @@ object Examples {
 
     /* Parse the co-trajectory */
     val cotraj: Dataset[Trajectory] = Parse
-      .testCoTrajectory("data/examples/cotrajectory_example.csv")
+      .example("data/examples/cotrajectory_example.csv")
       .cache
 
     /* Compute number of trajectories and number of measurements */
@@ -133,13 +133,12 @@ object Examples {
     val output = new PrintWriter(new File(filename))
     println("Output data to " + filename)
 
-    /* Parse the co-trajectory */
-    val cotraj: Dataset[Trajectory] = CoTrajectoryUtils.getCoTrajectory(
-      Preprocess.dropShort(
-        Preprocess.keepBox(
-          Parse.beijing(Parse.beijingFile),
-          Preprocess.boxBeijing),
-        10))
+    /* Parse the co-trajectory. We keep only measurements that are inside
+     * a box representing Beijing and trajectories with at least 10
+     * measurements. */
+    val cotraj: Dataset[Trajectory] = Parse.beijing(Parse.beijingFile)
+      .map(_.filterBox(Parse.beijingBox))
+      .filter(_.measurements.length >= 10)
       .cache
 
     /* Compute number of trajectories and number of measurements */
@@ -249,13 +248,12 @@ object Examples {
   def example2NumPathsMeasurements(fraction: Double = 0.05):
       Dataset[(MeasurementID, BigInt)] = {
     println("Computing graph")
-    /* Parse the co-trajectory */
-    val cotraj = CoTrajectoryUtils.getCoTrajectory(
-      Preprocess.dropShort(
-        Preprocess.keepBox(
-          Parse.beijing(Parse.beijingFile),
-          Preprocess.boxBeijing),
-        10))
+    /* Parse the co-trajectory. We keep only measurements that are inside
+     * a box representing Beijing and trajectories with at least 10
+     * measurements. */
+    val cotraj: Dataset[Trajectory] = Parse.beijing(Parse.beijingFile)
+      .map(_.filterBox(Parse.beijingBox))
+      .filter(_.measurements.length >= 10)
       .cache
 
     val ids = cotraj.select($"id").as[Int].cache
@@ -298,13 +296,12 @@ object Examples {
    * predicates in the thesis. */
   def example2NumPathsStartEnd() = {
     println("Computing graph")
-    /* Parse the co-trajectory */
-    val cotraj = CoTrajectoryUtils.getCoTrajectory(
-      Preprocess.dropShort(
-        Preprocess.keepBox(
-          Parse.beijing(Parse.beijingFile),
-          Preprocess.boxBeijing),
-        10))
+    /* Parse the co-trajectory. We keep only measurements that are inside
+     * a box representing Beijing and trajectories with at least 10
+     * measurements. */
+    val cotraj: Dataset[Trajectory] = Parse.beijing(Parse.beijingFile)
+      .map(_.filterBox(Parse.beijingBox))
+      .filter(_.measurements.length >= 10)
       .cache
 
     /* Compute possible swaps */
@@ -341,13 +338,12 @@ object Examples {
    * not an exact number but an approximate one. */
   def example2NumPathsNMeasurements(N: Int = 4, sampleSize: Int = 20000) = {
     println("Computing graph")
-    /* Parse the co-trajectory */
-    val cotraj = CoTrajectoryUtils.getCoTrajectory(
-      Preprocess.dropShort(
-        Preprocess.keepBox(
-          Parse.beijing(Parse.beijingFile),
-          Preprocess.boxBeijing),
-        10))
+    /* Parse the co-trajectory. We keep only measurements that are inside
+     * a box representing Beijing and trajectories with at least 10
+     * measurements. */
+    val cotraj: Dataset[Trajectory] = Parse.beijing(Parse.beijingFile)
+      .map(_.filterBox(Parse.beijingBox))
+      .filter(_.measurements.length >= 10)
       .cache
 
     /* Compute possible swaps */
@@ -388,14 +384,15 @@ object Examples {
   }
 
   /* Generates data for visualizing some trajectories from taxis in
-   * Beijing. */
+   * San Fransisco. */
   def figure1(n: Int = 10, seed: Int = 0) = {
-    val cotraj = CoTrajectoryUtils.getCoTrajectory(
-      Preprocess.dropShort(
-        Preprocess.keepBox(
-          Parse.sanFransisco(Parse.sanFransiscoFile),
-          Preprocess.boxSanFransisco),
-        10))
+    /* Parse the co-trajectory. We keep only measurements that are inside
+     * a box representing San Francisco and trajectories with at least
+     * 10 measurements. */
+    val cotraj: Dataset[Trajectory] = Parse.sanFrancisco(Parse.sanFranciscoFile)
+      .map(_.filterBox(Parse.sanFranciscoBox))
+      .filter(_.measurements.length >= 10)
+      .cache
 
     val sample: Array[Trajectory] = cotraj.rdd.takeSample(false, n, seed)
 

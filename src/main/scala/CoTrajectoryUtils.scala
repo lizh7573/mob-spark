@@ -14,12 +14,13 @@ object CoTrajectoryUtils {
       .as[Trajectory]
       .map(_.normalize())
 
-  /* Takes a dataset of grid measurements with IDs and returns the
-   * corresponding co-trajectory. */
-  def getCoTrajectoryGrid(data: Dataset[GridID]): Dataset[TrajectoryGrid] =
+  /* Takes a dataset of partitioned measurements with IDs and returns
+   * the corresponding co-trajectory. */
+  def getCoTrajectoryPartition(data: Dataset[MeasurementPartitionID]):
+      Dataset[TrajectoryPartition] =
     data.groupBy("id")
-      .agg(collect_set($"grid").alias("grids"))
-      .as[TrajectoryGrid]
+      .agg(collect_set($"partition").alias("partitions"))
+      .as[TrajectoryPartition]
       .map(_.normalize)
 
   /* An implicit class for a co-trajectory consisting of measurements.
@@ -95,14 +96,16 @@ object CoTrajectoryUtils {
       }
   }
 
-  /* An implicit class for a co-trajectory consisting of grid
+  /* An implicit class for a co-trajectory consisting of partitioned
    * measurements. Most of the co-trajectory specific methods are
    * implemented here.*/
-  implicit class CoTrajectoryGrid(cotraj: Dataset[TrajectoryGrid]) {
+  implicit class CoTrajectoryPartition(cotraj: Dataset[TrajectoryPartition]) {
 
-    /* Return a Dataset of all grids in the co-trajectory. */
-    def measurements(): Dataset[GridID] = cotraj
-      .flatMap((r => r.grids.map(m => GridID(r.id, m))))
+    /* Return a Dataset of all partitioned measurements in the
+     * co-trajectory. */
+    def measurements(): Dataset[MeasurementPartitionID] = cotraj
+      .flatMap((r => r.partitions.map(m =>
+        MeasurementPartitionID(r.id, m))))
 
     /* Return a Dataset of with the jumpchains of the co-trajectorys
      * trajectories. The jumpchain of a trajectory is the chain of
@@ -138,7 +141,7 @@ object CoTrajectoryUtils {
     /* Returns an enumeration of all the partitions occurring in the
      * co-trajectory. */
     def enumeratePartitions(): Dataset[(LocationPartition, BigInt)] =
-      cotraj.flatMap(_.grids)
+      cotraj.flatMap(_.partitions)
         .distinct
         .rdd
         .zipWithIndex
@@ -152,10 +155,10 @@ object CoTrajectoryUtils {
     def swaps(partitioning: Long): Dataset[Swap] =
       cotraj
         .measurements
-        .groupBy("grid")
+        .groupBy("partition")
         .agg(collect_set($"id").alias("ids"))
         .filter(size($"ids") > 1)
-        .as[(Grid, Array[Int])]
-        .map{case (grid, ids) => Swap((grid.time + 1L)*partitioning, ids)}
+        .as[(MeasurementPartition, Array[Int])]
+        .map{case (m, ids) => Swap((m.time + 1L)*partitioning, ids)}
   }
 }

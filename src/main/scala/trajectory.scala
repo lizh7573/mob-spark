@@ -24,40 +24,45 @@ object TrajectoryHelper {
       locations(0) +: locations.sliding(2)
         .collect{ case Array(a, b) if a != b => b }.toArray
 
-  /* Return the jumpchain times of a list of grid measurements. This is
-   * a list of times where each time represents the time it stays in
-   * one particular location. */
-  def jumpchainTimes(grids: Array[Grid]):
+  /* Return the jumpchain times of a list of partitioned measurements.
+   * This is a list of times where each time represents the time it
+   * stays in one particular location. */
+  def jumpchainTimes(measurementPartitions: Array[MeasurementPartition]):
       Array[Long] =
-    if (grids.isEmpty)
+    if (measurementPartitions.isEmpty)
       Array()
     else
-      grids.tail.foldLeft((Array(): Array[Long], grids.head)) {
-        case ((ts: Array[Long], g1:Grid), g2:Grid) =>
-          if (g1.location != g2.location)
-            (ts :+ (g2.time - g1.time), g2)
-          else
-            (ts, g1)
-      }._1
+      measurementPartitions
+        .tail
+        .foldLeft((Array(): Array[Long], measurementPartitions.head)){
+          case ((ts: Array[Long], m1:MeasurementPartition),
+            m2:MeasurementPartition) =>
+            if (m1.location != m2.location)
+              (ts :+ (m2.time - m1.time), m2)
+            else
+              (ts, m1)
+        }._1
 
-  /* Return the list of transitions for a list of grid measurements. The
-   * list of transition consists of pairs of locations together with
-   * the time spent in the first location before going to the
-   * second. */
-  def transitions(grids: Array[Grid]):
+  /* Return the list of transitions for a list of partitioned
+   * measurements. The list of transition consists of pairs of
+   * locations together with the time spent in the first location
+   * before going to the second. */
+  def transitions(measurementPartitions: Array[MeasurementPartition]):
       Array[(LocationPartition, LocationPartition, Long)] =
-    if (grids.length < 2)
+    if (measurementPartitions.length < 2)
       Array()
     else
-      grids.tail.foldLeft((Array(): Array[(LocationPartition,
-        LocationPartition, Long)], grids.head)) {
-        case ((list: Array[(LocationPartition, LocationPartition, Long)],
-          g1: Grid), g2: Grid) =>
-          if (g1.location != g2.location)
-            (list :+ (g1.location, g2.location, g2.time - g1.time), g2)
-          else
-            (list, g1)
-      }._1
+      measurementPartitions
+        .tail
+        .foldLeft((Array(): Array[(LocationPartition,
+          LocationPartition, Long)], measurementPartitions.head)) {
+          case ((list: Array[(LocationPartition, LocationPartition, Long)],
+            m1: MeasurementPartition), m2: MeasurementPartition) =>
+            if (m1.location != m2.location)
+              (list :+ (m1.location, m2.location, m2.time - m1.time), m2)
+            else
+              (list, m1)
+        }._1
 }
 
 /* Holds a trajectory represented by an id and an array of measurements */
@@ -77,23 +82,24 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
    * is the case.*/
   def normalize(): Trajectory = Trajectory(id, measurements.sortBy(_.time))
 
-  /* Return the TrajectoryGrid given by getting the partition for all
-   * measurements in the trajectory. */
-  def partition(partitioning: (Long, Double)): TrajectoryGrid =
-    TrajectoryGrid(id, measurements.map(_.partition(partitioning)))
+  /* Return the partitioned trajectory given by getting the partition
+   * for all measurements in the trajectory. */
+  def partition(partitioning: (Long, Double)): TrajectoryPartition =
+    TrajectoryPartition(id, measurements.map(_.partition(partitioning)))
 
-  /* Return the TrajectoryGrid given by getting the partition for all
-   * measurements in the trajectory. For each time partition it only
-   * keeps one measurement, the first one in the list. */
-  def partitionDistinct(partitioning: (Long, Double)): TrajectoryGrid = {
-    val grids = measurements.map(_.partition(partitioning))
+  /* Return the partitioned trajectory given by getting the partition
+   * for all measurements in the trajectory. For each time partition
+   * it only keeps one measurement, the first one in the list. */
+  def partitionDistinct(partitioning: (Long, Double)): TrajectoryPartition = {
+    val measurementPartitions = measurements.map(_.partition(partitioning))
 
-    if (grids.isEmpty)
-      TrajectoryGrid(id, grids)
+    if (measurementPartitions.isEmpty)
+      TrajectoryPartition(id, measurementPartitions)
     else
-      TrajectoryGrid(id, grids.head +: grids
+      TrajectoryPartition(id, measurementPartitions.head
+        +: measurementPartitions
         .sliding(2)
-        .collect{case Array(g1, g2) if g1.time != g2.time => g2}
+        .collect{case Array(m1, m2) if m1.time != m2.time => m2}
         .toArray)
   }
 
@@ -144,7 +150,8 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
   def jumpchainTimes(partitioning: Double): (Int, Array[Long]) =
     (id, TrajectoryHelper
       .jumpchainTimes(measurements
-        .map(m => Grid(m.time, m.location.partition(partitioning)))))
+        .map(m => MeasurementPartition(m.time,
+          m.location.partition(partitioning)))))
 
   /* Return the list of transitions for a trajectory. The list of
    * transition consists of pairs of locations together with the time
@@ -153,7 +160,8 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
       (Int, Array[(LocationPartition, LocationPartition, Long)]) =
     (id, TrajectoryHelper
       .transitions(measurements
-        .map(m => Grid(m.time, m.location.partition(partitioning)))))
+        .map(m => MeasurementPartition(m.time,
+          m.location.partition(partitioning)))))
 
   /* Return a map matched version of the trajectory. The trajectory is
    * matched using Open Street Map data. For more details see the
@@ -195,43 +203,42 @@ case class Trajectory(id: Int, measurements: Array[Measurement]) {
 }
 
 /* Holds a trajectory represented by an id and an array of partitions */
-case class TrajectoryGrid(id: Int, grids: Array[Grid]) {
+case class TrajectoryPartition(id: Int,
+  partitions: Array[MeasurementPartition]) {
   override def equals(that: Any): Boolean =
     that match {
-      case that: TrajectoryGrid => id == that.id &&
-        grids.length == that.grids.length &&
-        grids.zip(that.grids).forall{
-          case (i, j) => i == j
-        }
+      case that: TrajectoryPartition => id == that.id &&
+        partitions.length == that.partitions.length &&
+        partitions.sameElements(that.partitions)
       case _ => false
     }
 
-  /* The methods for TrajectoryGrid assumes that the array of Grids is
-   * sorted with respect to time. This method makes sure that this is
-   * the case.*/
-  def normalize() = TrajectoryGrid(id, grids.sortBy(_.time))
+  /* The methods for TrajectoryPartition assumes that the array of
+   * partitioned measurements is sorted with respect to time. This
+   * method makes sure that this is the case.*/
+  def normalize() = TrajectoryPartition(id, partitions.sortBy(_.time))
 
-  /* Return the Trajectory given by unpartitioning all grids in the
-   * trajectory. */
+  /* Return the Trajectory given by unpartitioning all partitioned
+   * measurements in the trajectory. */
   def unpartition(partitioning: (Long, Double)): Trajectory =
-    Trajectory(id, grids.map(_.unpartition(partitioning)))
+    Trajectory(id, partitions.map(_.unpartition(partitioning)))
 
   /* Return the jumpchain of the trajectory. This is the chain of
    * locations for the trajectory, removing any succesive
    * duplicates. */
   def jumpchain(): (Int, Array[LocationPartition]) =
-    (id, TrajectoryHelper.jumpchain(grids.map(_.location)))
+    (id, TrajectoryHelper.jumpchain(partitions.map(_.location)))
 
   /* Return the jumpchain times of a trajectory. This is a list of times
    * where each time represents the time the trajectory stays in one
    * particular location. */
   def jumpchainTimes(): (Int, Array[Long]) =
-    (id, TrajectoryHelper.jumpchainTimes(grids))
+    (id, TrajectoryHelper.jumpchainTimes(partitions))
 
   /* Return the list of transitions for a trajectory. The list of
    * transition consists of pairs of locations together with the time
    * spent in the first location before going to the second. */
   def transitions():
       (Int, Array[(LocationPartition, LocationPartition, Long)]) =
-    (id, TrajectoryHelper.transitions(grids))
+    (id, TrajectoryHelper.transitions(partitions))
 }

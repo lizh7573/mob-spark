@@ -39,52 +39,52 @@ class TrajectoryHelperTest extends org.scalatest.FunSuite {
     assert(arrayEqual(jc4, res4))
   }
 
-  val grids1 = Array(): Array[Grid]
+  val partitions1 = Array(): Array[MeasurementPartition]
 
-  val grids2 = locations2.zipWithIndex.map{
-    case (x, t) => Grid(t, x)
+  val partitions2 = locations2.zipWithIndex.map{
+    case (x, t) => MeasurementPartition(t, x)
   }
 
-  val grids3 = locations3.zipWithIndex.map{
-    case (x, t) => Grid(t, x)
+  val partitions3 = locations3.zipWithIndex.map{
+    case (x, t) => MeasurementPartition(t, x)
   }
 
-  val grids4 = locations4.zipWithIndex.map{
-    case (x, t) => Grid(t, x)
+  val partitions4 = locations4.zipWithIndex.map{
+    case (x, t) => MeasurementPartition(t, x)
   }
 
   test("TrajectoryHelper.jumpchainTimes") {
-    val jct1 = TrajectoryHelper.jumpchainTimes(grids1)
+    val jct1 = TrajectoryHelper.jumpchainTimes(partitions1)
     val res1 = Array(): Array[Long]
     assert(java.util.Arrays.equals(jct1, res1))
 
-    val jct2 = TrajectoryHelper.jumpchainTimes(grids2)
+    val jct2 = TrajectoryHelper.jumpchainTimes(partitions2)
     val res2 = Array.fill(9)(1L)
     assert(java.util.Arrays.equals(jct2, res2))
 
-    val jct3 = TrajectoryHelper.jumpchainTimes(grids3)
+    val jct3 = TrajectoryHelper.jumpchainTimes(partitions3)
     val res3 = Array.fill(9)(2L)
     assert(java.util.Arrays.equals(jct3, res3))
 
-    val jct4 = TrajectoryHelper.jumpchainTimes(grids4)
+    val jct4 = TrajectoryHelper.jumpchainTimes(partitions4)
     val res4 = Array.fill(9)(2L) ++ (4L +: Array.fill(8)(2L))
     assert(java.util.Arrays.equals(jct4, res4))
   }
 
   test("TrajectoryHelper.transitions") {
-    val transitions1 = TrajectoryHelper.transitions(grids1)
+    val transitions1 = TrajectoryHelper.transitions(partitions1)
     val res1 = Array(): Array[(LocationPartition, LocationPartition, Long)]
     assert(arrayEqual(transitions1, res1))
 
-    val transitions2 = TrajectoryHelper.transitions(grids2)
+    val transitions2 = TrajectoryHelper.transitions(partitions2)
     val res2 = locations2.sliding(2).map(s => (s(0), s(1), 1L)).toArray
     assert(arrayEqual(transitions2, res2))
 
-    val transitions3 = TrajectoryHelper.transitions(grids3)
+    val transitions3 = TrajectoryHelper.transitions(partitions3)
     val res3 = locations2.sliding(2).map(s => (s(0), s(1), 2L)).toArray
     assert(arrayEqual(transitions3, res3))
 
-    val transitions4 = TrajectoryHelper.transitions(grids4)
+    val transitions4 = TrajectoryHelper.transitions(partitions4)
     val res4 = (locations2.sliding(2).map(s => (s(0), s(1), 2L)).toArray ++
       ((LocationPartition(Array(9, 9)),
         LocationPartition(Array(8, 8)), 4L) +:
@@ -114,31 +114,31 @@ class TrajectoryTest extends org.scalatest.FunSuite {
     .map{case (m, i) => Measurement(i, m)})
 
   test("Trajectory.partitionDistinct") {
-    val grid1 = trajectory1.partitionDistinct((2L, 5.0))
-    val res1 = TrajectoryGrid(1, Array(): Array[Grid])
-    assert(grid1 == res1)
+    val partition1 = trajectory1.partitionDistinct((2L, 5.0))
+    val res1 = TrajectoryPartition(1, Array(): Array[MeasurementPartition])
+    assert(partition1 == res1)
 
-    val grid2 = trajectory2.partitionDistinct((1L, 5.0))
+    val partition2 = trajectory2.partitionDistinct((1L, 5.0))
     val res2 = trajectory2.partition((1L, 5.0))
-    assert(grid2 == res2)
+    assert(partition2 == res2)
 
-    val grid3 = trajectory2.partitionDistinct((2L, 5.0))
-    val res3 = TrajectoryGrid(2, trajectory2
+    val partition3 = trajectory2.partitionDistinct((2L, 5.0))
+    val res3 = TrajectoryPartition(2, trajectory2
       .measurements
       .filter(_.time % 2 == 0)
       .map(_.partition((2L, 5.0))))
-    assert(grid3 == res3)
+    assert(partition3 == res3)
 
-    val grid4 = trajectory3.partitionDistinct((1L, 5.0))
+    val partition4 = trajectory3.partitionDistinct((1L, 5.0))
     val res4 = trajectory3.partition((1L, 5.0))
 
-    assert(grid4 == res4)
+    assert(partition4 == res4)
 
-    val grid5 = trajectory3.partitionDistinct((2L, 5.0))
-    val res5 = TrajectoryGrid(3, trajectory3
+    val partition5 = trajectory3.partitionDistinct((2L, 5.0))
+    val res5 = TrajectoryPartition(3, trajectory3
       .measurements
       .filter(_.time % 2 == 0)
       .map(_.partition((2L, 5.0))))
-    assert(grid5 == res5)
+    assert(partition5 == res5)
   }
 }

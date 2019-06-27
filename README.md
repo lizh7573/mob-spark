@@ -60,3 +60,13 @@ id = 4: 1
 The other examples will not run since they need access to external
 datasets, more information about how to get these can be found further
 down.
+
+## File structure
+It is structured as a typical Scala project with the general code in
+`src/main/scala/` and the test code in `src/test/scala/`. It follows
+the Scala style of files starting with a capital letter corresponding
+to a single class, or object, with the same name and files starting
+with a lower-case letter corresponding to multiple, related, classes
+or objects. The `data/` directory contains data for some
+co-trajectories used in tests and examples. Output to files is in
+general done to the `output/` directory.

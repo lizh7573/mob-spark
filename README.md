@@ -70,3 +70,44 @@ with a lower-case letter corresponding to multiple, related, classes
 or objects. The `data/` directory contains data for some
 co-trajectories used in tests and examples. Output to files is in
 general done to the `output/` directory.
+
+## Class structure
+The project consists of Classes, which hold data and methods working
+on that data, and Objects, which only holds methods.
+
+### Classes
+All the classes are in project are either case classes, essentially
+tuples with methods on, or implicit classes, renaming of other types
+with added methods.
+
+The case classes are
+* Location(x: Array[Double])
+* LocationPartition(x: Array[Int])
+* Measurement(time: Long, location: Location)
+* MeasurementID(id: Int, measurement: Measurement)
+* MeasurementPartition(time: Long, location: LocationPartition)
+* MeasurementPartitionID(id: Int, partition: MeasurementPartition)
+* Trajectory(id: Int, measurements: Array[Measurement])
+* TrajectoryPartition(id: Int, partitions: Array[MeasurementPartition])
+* Swap(time: Long, ids: Array[Int])
+* LonLatJson(`type`: String = "MultiPoint", coordinates: Array[(Double, Double)])
+
+The implicit classes are
+* CoTrajectory(cotraj: Dataset[Trajectory])
+* CoTrajectoryPartition(cotraj: Dataset[TrajectoryPartition])
+* Swaps(swaps: Dataset[Swap])
+### Objects
+The objects contain general methods, some of the are helper objects
+mainly meant for implementing internal methods whereas other for use
+by the end user. The objects mainly meant for internal use are
+* CoTrajectoryUtils
+* GraphHopperHelper
+* TrajectoryHelper
+* SparkSessionHolder
+
+And the ones for general use are
+* Parse
+* Swapmob
+* Examples
+* Visualize
+

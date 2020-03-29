@@ -1,4 +1,4 @@
-# Spark-Mob
+# Mob-Spark
 This is project aimed at analysing mobility data over Apache Spark.
 This project extends from [Joel Dahne](https://github.com/Joel-Dahne/co-trajetory-analysis)'s 
 **Co-Trajectory Analysis** package.

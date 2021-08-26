@@ -2,8 +2,8 @@ name := "Co-traj"
 
 version := "1.0"
 
-sparkVersion := "2.4.0"
-scalaVersion := "2.11.12"
+sparkVersion := "3.1.2"
+scalaVersion := "2.12.10"
 
 sparkComponents += "sql"
 sparkComponents += "graphx"
